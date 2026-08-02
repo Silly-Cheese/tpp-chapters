@@ -47,8 +47,36 @@ service cloud.firestore {
       return hasRole(['owner', 'chapterAdmin']);
     }
 
+    function canManageChapterWorkspaces() {
+      return hasRole(['owner', 'chapterAdmin', 'complianceAdmin']);
+    }
+
+    function canReadChapterOperations() {
+      return hasRole(['owner', 'chapterAdmin', 'complianceAdmin', 'supportAgent']);
+    }
+
     function isAdministrativeStaff() {
       return hasRole(['owner', 'chapterAdmin', 'complianceAdmin', 'supportAgent']);
+    }
+
+    function membershipId(chapterId, uid) {
+      return chapterId + '__' + uid;
+    }
+
+    function hasChapterMembership(chapterId) {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/chapterMemberships/$(membershipId(chapterId, request.auth.uid)))
+        && get(/databases/$(database)/documents/chapterMemberships/$(membershipId(chapterId, request.auth.uid))).data.status == 'active';
+    }
+
+    function chapterMembership(chapterId) {
+      return get(/databases/$(database)/documents/chapterMemberships/$(membershipId(chapterId, request.auth.uid))).data;
+    }
+
+    function hasChapterMembershipRole(chapterId, allowedRoles) {
+      return hasChapterMembership(chapterId)
+        && chapterMembership(chapterId).role in allowedRoles;
     }
 
     function inviteAfter(inviteId) {
@@ -87,8 +115,8 @@ service cloud.firestore {
     }
 
     function validInvitationClaim(inviteId) {
-      let membershipId = resource.data.chapterId + '__' + request.auth.uid;
-      let membership = getAfter(/databases/$(database)/documents/chapterMemberships/$(membershipId)).data;
+      let memberId = resource.data.chapterId + '__' + request.auth.uid;
+      let member = getAfter(/databases/$(database)/documents/chapterMemberships/$(memberId)).data;
       return signedIn()
         && resource.data.status == 'pending'
         && resource.data.expiresAt > request.time
@@ -100,14 +128,14 @@ service cloud.firestore {
         && request.resource.data.claimedByUid == request.auth.uid
         && request.resource.data.claimedAt == request.time
         && request.resource.data.updatedAt == request.time
-        && membership.uid == request.auth.uid
-        && membership.chapterId == resource.data.chapterId
-        && membership.role == resource.data.role
-        && membership.invitationId == inviteId
-        && membership.status == 'active';
+        && member.uid == request.auth.uid
+        && member.chapterId == resource.data.chapterId
+        && member.role == resource.data.role
+        && member.invitationId == inviteId
+        && member.status == 'active';
     }
 
-    function validSelfMembership(membershipId) {
+    function validSelfMembership(memberId) {
       let invite = inviteAfter(request.resource.data.invitationId);
       let user = getAfter(/databases/$(database)/documents/systemUsers/$(request.auth.uid)).data;
       return signedIn()
@@ -122,7 +150,7 @@ service cloud.firestore {
           'createdAt', 'updatedAt'
         ])
         && request.resource.data.uid == request.auth.uid
-        && membershipId == request.resource.data.chapterId + '__' + request.auth.uid
+        && memberId == request.resource.data.chapterId + '__' + request.auth.uid
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() >= 2
@@ -144,19 +172,96 @@ service cloud.firestore {
         && user.accountStatus == 'active';
     }
 
+    function validSelfLeader(chapterId, leaderId) {
+      let member = chapterMembership(chapterId);
+      return hasChapterMembership(chapterId)
+        && leaderId == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'uid', 'chapterId', 'displayName', 'email', 'role', 'status',
+          'agreementStatus', 'trainingStatus', 'startDate',
+          'visibleToChapter', 'source', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'uid', 'chapterId', 'displayName', 'email', 'role', 'status',
+          'agreementStatus', 'trainingStatus', 'startDate',
+          'visibleToChapter', 'source', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.chapterId == chapterId
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 2
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.role == member.role
+        && request.resource.data.status == 'active'
+        && request.resource.data.agreementStatus == 'pending'
+        && request.resource.data.trainingStatus == 'pending'
+        && request.resource.data.startDate is timestamp
+        && request.resource.data.visibleToChapter == true
+        && request.resource.data.source == 'self_activation'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validNoticeReceipt(chapterId, receiptId) {
+      let noticeId = request.resource.data.noticeId;
+      return hasChapterMembership(chapterId)
+        && receiptId == noticeId + '__' + request.auth.uid
+        && exists(/databases/$(database)/documents/chapters/$(chapterId)/notices/$(noticeId))
+        && get(/databases/$(database)/documents/chapters/$(chapterId)/notices/$(noticeId)).data.requireAcknowledgment == true
+        && request.resource.data.keys().hasAll([
+          'noticeId', 'chapterId', 'uid', 'acknowledgedAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'noticeId', 'chapterId', 'uid', 'acknowledgedAt', 'updatedAt'
+        ])
+        && request.resource.data.chapterId == chapterId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.acknowledgedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validAdviserCheckin(chapterId) {
+      return hasChapterMembershipRole(chapterId, ['adviser'])
+        && request.resource.data.keys().hasAll([
+          'chapterId', 'createdByUid', 'adviserName', 'category', 'subject',
+          'details', 'status', 'confidential', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'chapterId', 'createdByUid', 'adviserName', 'category', 'subject',
+          'details', 'status', 'confidential', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.chapterId == chapterId
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.adviserName is string
+        && request.resource.data.adviserName.size() >= 2
+        && request.resource.data.adviserName.size() <= 100
+        && request.resource.data.category in [
+          'routine_checkin', 'institutional_change', 'leadership_concern',
+          'privacy_concern', 'safety_concern'
+        ]
+        && request.resource.data.subject is string
+        && request.resource.data.subject.size() >= 4
+        && request.resource.data.subject.size() <= 140
+        && request.resource.data.details is string
+        && request.resource.data.details.size() >= 20
+        && request.resource.data.details.size() <= 3000
+        && request.resource.data.status == 'submitted'
+        && request.resource.data.confidential == true
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
     match /systemUsers/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow read: if isAdministrativeStaff();
-
       allow create: if isOwner() || validSelfActivatedProfile(uid);
       allow delete: if isOwner();
-
       allow update: if signedIn()
         && request.auth.uid == uid
         && resource.data.accountStatus == 'active'
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['displayName', 'updatedAt']);
-
       allow update: if isOwner();
     }
 
@@ -165,20 +270,15 @@ service cloud.firestore {
       allow create, update, delete: if isOwner();
     }
 
-    // Public source of truth. Queries must include isPublished == true.
     match /publicChapterRegistry/{chapterId} {
       allow get, list: if resource.data.isPublished == true;
       allow create, update, delete: if canManageRegistry();
     }
 
-    // Phase 3 invitation records use the SHA-256 activation-code hash as the
-    // document ID. Unauthenticated users may retrieve only pending, unexpired
-    // records by exact document ID; collection listing remains staff-only.
     match /chapterInvitations/{inviteId} {
       allow get: if resource.data.status == 'pending'
         && resource.data.expiresAt > request.time;
       allow list: if canManageInvitations();
-
       allow create: if canManageInvitations()
         && request.resource.data.keys().hasAll([
           'activationCodeHash', 'codeHint', 'email', 'displayName',
@@ -216,25 +316,61 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && get(/databases/$(database)/documents/publicChapterRegistry/$(request.resource.data.chapterId)).data.isPublished == true
         && get(/databases/$(database)/documents/publicChapterRegistry/$(request.resource.data.chapterId)).data.officialName == request.resource.data.chapterName;
-
       allow update: if canManageInvitations() || validInvitationClaim(inviteId);
       allow delete: if isOwner();
     }
 
-    // One immutable access record per user and chapter. Phase 4 will consume
-    // these records to build the Director and Adviser workspaces.
-    match /chapterMemberships/{membershipId} {
+    match /chapterMemberships/{memberId} {
       allow read: if isAdministrativeStaff();
       allow read: if signedIn()
         && resource.data.uid == request.auth.uid
         && request.auth.token.email_verified == true;
-
-      allow create: if canManageInvitations() || validSelfMembership(membershipId);
+      allow create: if canManageInvitations() || validSelfMembership(memberId);
       allow update, delete: if canManageInvitations();
     }
 
-    // Phase 2 public concern reports. Creation is intentionally narrow and
-    // field-limited because the public website has no trusted server backend.
+    match /chapters/{chapterId} {
+      allow read: if canReadChapterOperations() || hasChapterMembership(chapterId);
+      allow create, update, delete: if canManageChapterWorkspaces();
+
+      match /requirements/{requirementId} {
+        allow read: if canReadChapterOperations() || hasChapterMembership(chapterId);
+        allow create, update, delete: if canManageChapterWorkspaces();
+      }
+
+      match /leaders/{leaderId} {
+        allow read: if canReadChapterOperations() || hasChapterMembership(chapterId);
+        allow create: if canManageChapterWorkspaces() || validSelfLeader(chapterId, leaderId);
+        allow update, delete: if canManageChapterWorkspaces();
+      }
+
+      match /documents/{documentId} {
+        allow read: if canReadChapterOperations() || hasChapterMembership(chapterId);
+        allow create, update, delete: if canManageChapterWorkspaces();
+      }
+
+      match /notices/{noticeId} {
+        allow read: if canReadChapterOperations() || hasChapterMembership(chapterId);
+        allow create, update, delete: if canManageChapterWorkspaces();
+      }
+
+      match /noticeReceipts/{receiptId} {
+        allow read: if canReadChapterOperations()
+          || (hasChapterMembership(chapterId) && resource.data.uid == request.auth.uid);
+        allow create, update: if validNoticeReceipt(chapterId, receiptId);
+        allow delete: if canManageChapterWorkspaces();
+      }
+
+      match /adviserCheckins/{checkinId} {
+        allow read: if canManageChapterWorkspaces()
+          || (hasChapterMembershipRole(chapterId, ['adviser'])
+            && resource.data.createdByUid == request.auth.uid);
+        allow create: if validAdviserCheckin(chapterId);
+        allow update: if canManageChapterWorkspaces();
+        allow delete: if isOwner();
+      }
+    }
+
     match /unauthorizedChapterReports/{reportId} {
       allow create: if request.resource.data.keys().hasAll([
           'reportType', 'reporterName', 'reporterEmail', 'relationship',
@@ -277,13 +413,11 @@ service cloud.firestore {
         && request.resource.data.pageUrl is string
         && request.resource.data.pageUrl.size() <= 500
         && request.resource.data.createdAt == request.time;
-
       allow read: if isAdministrativeStaff();
       allow update: if hasRole(['owner', 'chapterAdmin', 'supportAgent']);
       allow delete: if isOwner();
     }
 
-    // Audit records are append-only. Client-created records must identify the signed-in actor.
     match /auditLogs/{auditId} {
       allow read: if isAdministrativeStaff();
       allow create: if isActive()
