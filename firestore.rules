@@ -27,6 +27,10 @@ service cloud.firestore {
       return hasRole(['owner']);
     }
 
+    function canManageRegistry() {
+      return hasRole(['owner', 'chapterAdmin']);
+    }
+
     function isAdministrativeStaff() {
       return hasRole(['owner', 'chapterAdmin', 'complianceAdmin', 'supportAgent']);
     }
@@ -34,11 +38,8 @@ service cloud.firestore {
     match /systemUsers/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow read: if isAdministrativeStaff();
-
-      // Phase 1: only the Owner may create, change roles, disable, or delete accounts.
       allow create, delete: if isOwner();
 
-      // Users may update only their own display name and update timestamp.
       allow update: if signedIn()
         && request.auth.uid == uid
         && resource.data.accountStatus == 'active'
@@ -53,6 +54,62 @@ service cloud.firestore {
       allow create, update, delete: if isOwner();
     }
 
+    // Public source of truth. Queries must include isPublished == true.
+    match /publicChapterRegistry/{chapterId} {
+      allow get, list: if resource.data.isPublished == true;
+      allow create, update, delete: if canManageRegistry();
+    }
+
+    // Phase 2 public concern reports. Creation is intentionally narrow and
+    // field-limited because the public website has no trusted server backend.
+    match /unauthorizedChapterReports/{reportId} {
+      allow create: if request.resource.data.keys().hasAll([
+          'reportType', 'reporterName', 'reporterEmail', 'relationship',
+          'chapterName', 'institution', 'location', 'details', 'consent',
+          'status', 'source', 'pageUrl', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'reportType', 'reporterName', 'reporterEmail', 'relationship',
+          'chapterName', 'chapterId', 'institution', 'location', 'details',
+          'consent', 'status', 'source', 'pageUrl', 'createdAt'
+        ])
+        && request.resource.data.reportType == 'unauthorized_chapter'
+        && request.resource.data.reporterName is string
+        && request.resource.data.reporterName.size() >= 2
+        && request.resource.data.reporterName.size() <= 100
+        && request.resource.data.reporterEmail is string
+        && request.resource.data.reporterEmail.size() >= 5
+        && request.resource.data.reporterEmail.size() <= 160
+        && request.resource.data.relationship is string
+        && request.resource.data.relationship.size() >= 2
+        && request.resource.data.relationship.size() <= 80
+        && request.resource.data.chapterName is string
+        && request.resource.data.chapterName.size() >= 2
+        && request.resource.data.chapterName.size() <= 160
+        && (!('chapterId' in request.resource.data)
+          || (request.resource.data.chapterId is string
+            && request.resource.data.chapterId.size() <= 40))
+        && request.resource.data.institution is string
+        && request.resource.data.institution.size() >= 2
+        && request.resource.data.institution.size() <= 180
+        && request.resource.data.location is string
+        && request.resource.data.location.size() >= 2
+        && request.resource.data.location.size() <= 120
+        && request.resource.data.details is string
+        && request.resource.data.details.size() >= 20
+        && request.resource.data.details.size() <= 2000
+        && request.resource.data.consent == true
+        && request.resource.data.status == 'new'
+        && request.resource.data.source == 'public_registry'
+        && request.resource.data.pageUrl is string
+        && request.resource.data.pageUrl.size() <= 500
+        && request.resource.data.createdAt == request.time;
+
+      allow read: if isAdministrativeStaff();
+      allow update: if hasRole(['owner', 'chapterAdmin', 'supportAgent']);
+      allow delete: if isOwner();
+    }
+
     // Audit records are append-only. Client-created records must identify the signed-in actor.
     match /auditLogs/{auditId} {
       allow read: if isAdministrativeStaff();
@@ -65,7 +122,6 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Future phase collections remain locked until their specific rules are added.
     match /{document=**} {
       allow read, write: if false;
     }
