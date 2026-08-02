@@ -1,0 +1,24 @@
+{
+  "chapterId": "TPP-CH-2026-000001",
+  "officialName": "The Prayer Project at Example School",
+  "hostInstitutionName": "Example School",
+  "institutionType": "school",
+  "city": "Example City",
+  "state": "Arkansas",
+  "country": "United States",
+  "serviceArea": "Example School community",
+  "authorizationStatus": "active",
+  "standing": "good_standing",
+  "summary": "An approved Prayer Project chapter serving the Example School community.",
+  "publicMessage": "This chapter is currently recognized and authorized to operate as an official chapter of The Prayer Project.",
+  "publicNotice": "",
+  "isPublished": true,
+  "searchTokens": [
+    "tpp-ch-2026-000001",
+    "example",
+    "school",
+    "city",
+    "arkansas",
+    "ar"
+  ]
+}
