@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Phase 1 reserves Cloud Storage but does not expose uploads yet.
+    // Later phases will add role-aware paths for chapter documents and support attachments.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

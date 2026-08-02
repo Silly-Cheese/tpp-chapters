@@ -1,0 +1,73 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasUserRecord() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/systemUsers/$(request.auth.uid));
+    }
+
+    function currentUser() {
+      return get(/databases/$(database)/documents/systemUsers/$(request.auth.uid)).data;
+    }
+
+    function isActive() {
+      return hasUserRecord() && currentUser().accountStatus == 'active';
+    }
+
+    function hasRole(allowedRoles) {
+      return isActive() && currentUser().systemRole in allowedRoles;
+    }
+
+    function isOwner() {
+      return hasRole(['owner']);
+    }
+
+    function isAdministrativeStaff() {
+      return hasRole(['owner', 'chapterAdmin', 'complianceAdmin', 'supportAgent']);
+    }
+
+    match /systemUsers/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow read: if isAdministrativeStaff();
+
+      // Phase 1: only the Owner may create, change roles, disable, or delete accounts.
+      allow create, delete: if isOwner();
+
+      // Users may update only their own display name and update timestamp.
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && resource.data.accountStatus == 'active'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'updatedAt']);
+
+      allow update: if isOwner();
+    }
+
+    match /systemSettings/{documentId} {
+      allow read: if isActive();
+      allow create, update, delete: if isOwner();
+    }
+
+    // Audit records are append-only. Client-created records must identify the signed-in actor.
+    match /auditLogs/{auditId} {
+      allow read: if isAdministrativeStaff();
+      allow create: if isActive()
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.keys().hasAll(['actorUid', 'action', 'createdAt'])
+        && request.resource.data.keys().hasOnly([
+          'actorUid', 'action', 'targetType', 'targetId', 'summary', 'createdAt'
+        ]);
+      allow update, delete: if false;
+    }
+
+    // Future phase collections remain locked until their specific rules are added.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

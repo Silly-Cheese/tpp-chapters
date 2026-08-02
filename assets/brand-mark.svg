@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">The Prayer Project</title>
+  <desc id="desc">A gold star and cross mark in a dark circle.</desc>
+  <circle cx="64" cy="64" r="59" fill="#171612" stroke="#b99349" stroke-width="6"/>
+  <path d="M64 21l6.8 20.8h21.9L75 54.7l6.8 20.8L64 62.7 46.2 75.5 53 54.7 35.3 41.8h21.9z" fill="#b99349" opacity=".98"/>
+  <path d="M59 63h10v43H59zM44 78h40v10H44z" fill="#f7f2e7"/>
+</svg>
