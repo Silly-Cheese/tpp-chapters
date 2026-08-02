@@ -1,22 +1,33 @@
 # The Prayer Project — Chapter Registry & Operations Portal
 
-Phase 1 establishes the production foundation for the full Prayer Project chapter platform.
+The official public registry and private operations portal for Prayer Project chapters.
 
-## Phase 1 includes
+## Current release
+
+### Phase 1 — Foundation and design system
 
 - Responsive black, cream, white, and gold design system
-- Public landing page
-- Firebase Email/Password sign-in
-- Password-reset workflow
+- Firebase Email/Password sign-in and password reset
 - Persistent authenticated sessions
 - Firestore-backed portal profiles and roles
-- Role-protected dashboard routing
-- Owner, administrator, Director, and Adviser dashboard foundations
-- Editable user display name with field-restricted Security Rules
-- Public and authenticated system-status views
-- Mobile navigation, loading, success, empty, and error states
+- Owner, administrator, Director, and Adviser route protection
+- Profile editing with field-restricted Security Rules
+- Light and dark themes
 - GitHub Pages custom-domain configuration
-- Firestore and Cloud Storage rule files
+
+### Phase 2 — Public chapter registry and verification
+
+- Public Chapter ID verification
+- Search by approved public search token
+- Published chapter directory
+- Authorization and standing displays
+- Approval, renewal, and last-verified dates
+- Stable verification URLs and QR codes
+- Copy-link and print actions
+- Public explanation of the registry
+- Unauthorized chapter concern reports
+- Firestore rules for public/private data separation
+- Composite indexes for directory and search queries
 
 ## Production address
 
@@ -26,22 +37,19 @@ Phase 1 establishes the production foundation for the full Prayer Project chapte
 
 `tpp-chapters`
 
-The Firebase web configuration is intentionally public client configuration. Never commit a service-account key, private Admin SDK credential, or other server secret to this repository.
+The Firebase web configuration is public client configuration by design. Never commit a service-account key, Admin SDK private credential, or other server secret.
 
-## Required one-time setup
+## Required Firebase setup
 
-### 1. Enable Firebase Authentication
+### 1. Authentication
 
 In Firebase Console:
 
-1. Open **Authentication**.
-2. Select **Sign-in method**.
-3. Enable **Email/Password**.
-4. Add `chapter.ask4prayers.com` and `silly-cheese.github.io` to **Authorized domains** if they are not already present.
+1. Open **Authentication → Sign-in method**.
+2. Enable **Email/Password**.
+3. Add `chapter.ask4prayers.com` and `silly-cheese.github.io` to authorized domains when needed.
 
-### 2. Deploy the included Firestore and Storage rules
-
-Either copy `firestore.rules` and `storage.rules` into the Firebase Console rule editors, or deploy them using the Firebase CLI:
+### 2. Deploy Firestore Rules and indexes
 
 ```bash
 firebase login
@@ -49,21 +57,13 @@ firebase use tpp-chapters
 firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
+The two Phase 2 composite indexes may take several minutes to build. General search and the directory can show an index error until Firebase marks them ready.
+
 ### 3. Create the first Owner account
 
-Because this is a static GitHub Pages application, privileged account creation must not occur in browser code.
-
-1. In Firebase Console, open **Authentication → Users**.
-2. Create the Owner email/password account.
-3. Copy the generated Firebase UID.
-4. In Firestore, create this document:
-
-```text
-Collection: systemUsers
-Document ID: <OWNER_FIREBASE_UID>
-```
-
-Add these fields:
+1. In **Firebase Authentication → Users**, create the Owner email/password account.
+2. Copy the Firebase UID.
+3. Create `systemUsers/{OWNER_UID}` in Firestore with:
 
 | Field | Type | Value |
 |---|---|---|
@@ -74,22 +74,53 @@ Add these fields:
 | `createdAt` | timestamp | Current date/time |
 | `updatedAt` | timestamp | Current date/time |
 
-The portal will not grant access merely because a Firebase Auth account exists. The matching active `systemUsers/{uid}` record is required.
+A Firebase Authentication account alone does not grant portal access. The matching active `systemUsers` record is required.
 
-### 4. Enable GitHub Pages
+### 4. Publish chapter records
 
-In repository settings:
+Public records use:
 
-1. Open **Pages**.
-2. Deploy from the `main` branch and `/ (root)` folder.
-3. Confirm the custom domain is `chapter.ask4prayers.com`.
-4. Enable **Enforce HTTPS** after the certificate is available.
+```text
+publicChapterRegistry/{chapterId}
+```
 
-The repository includes the required `CNAME` file.
+Read [`docs/REGISTRY-DATA-MODEL.md`](docs/REGISTRY-DATA-MODEL.md) before creating a record. A safe fictional example is available in [`docs/sample-public-chapter.json`](docs/sample-public-chapter.json).
+
+The Firestore document ID should equal the permanent Chapter ID, for example:
+
+```text
+TPP-CH-2026-000001
+```
+
+Set `isPublished` to `true` only when the record is ready for public viewing.
+
+## Public routes
+
+```text
+/                         Registry homepage
+/#/verify                 Registry search
+/#/verify/{chapterId}     Live verification record
+/#/chapters               Published chapter directory
+/#/about-verification     Registry explanation
+/#/report-chapter         Public concern report
+/#/login                  Portal login
+```
+
+Pretty verification links such as `/verify/TPP-CH-2026-000001` are redirected by `404.html` into the application route.
+
+## Public and private data
+
+Public verification data belongs only in `publicChapterRegistry`. Do not place private contact details, minor information, prayer requests, applications, internal notes, incidents, or disciplinary information in public records.
+
+Public concern reports are stored in:
+
+```text
+unauthorizedChapterReports/{reportId}
+```
+
+Only authorized administrative accounts may read those reports.
 
 ## Role values
-
-The Phase 1 router recognizes these exact Firestore role strings:
 
 ```text
 owner
@@ -100,32 +131,29 @@ director
 adviser
 ```
 
-## Account status values
-
-Phase 1 grants portal access only when:
+Portal access requires:
 
 ```text
 accountStatus = active
 ```
 
-Other values render a restricted or pending state.
-
 ## Local testing
-
-Because the app uses JavaScript modules, serve the repository through a local HTTP server rather than opening `index.html` directly:
 
 ```bash
 python -m http.server 8080
 ```
 
-Then open `http://localhost:8080`.
+Then open `http://localhost:8080`. Add `localhost` to Firebase Authentication authorized domains when required.
 
-For Firebase Authentication, add `localhost` to the project's authorized domains if required.
+## Release notes
+
+- [`PHASE-1-NOTES.md`](PHASE-1-NOTES.md)
+- [`PHASE-2-NOTES.md`](PHASE-2-NOTES.md)
 
 ## Phase roadmap
 
-1. Foundation and design system — complete in this release
-2. Public chapter registry and verification
+1. Foundation and design system — complete
+2. Public chapter registry and verification — complete
 3. Account invitations and activation
 4. Director and Adviser portals
 5. Reports, renewals, and operational workflows
