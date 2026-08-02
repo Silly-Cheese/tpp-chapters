@@ -15,8 +15,20 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/systemUsers/$(request.auth.uid)).data;
     }
 
+    function chapterRoleRequiresVerifiedEmail() {
+      return hasUserRecord()
+        && currentUser().systemRole in ['director', 'adviser', 'chapterUser'];
+    }
+
+    function hasRequiredEmailVerification() {
+      return !chapterRoleRequiresVerifiedEmail()
+        || request.auth.token.email_verified == true;
+    }
+
     function isActive() {
-      return hasUserRecord() && currentUser().accountStatus == 'active';
+      return hasUserRecord()
+        && currentUser().accountStatus == 'active'
+        && hasRequiredEmailVerification();
     }
 
     function hasRole(allowedRoles) {
@@ -31,14 +43,113 @@ service cloud.firestore {
       return hasRole(['owner', 'chapterAdmin']);
     }
 
+    function canManageInvitations() {
+      return hasRole(['owner', 'chapterAdmin']);
+    }
+
     function isAdministrativeStaff() {
       return hasRole(['owner', 'chapterAdmin', 'complianceAdmin', 'supportAgent']);
+    }
+
+    function inviteAfter(inviteId) {
+      return getAfter(/databases/$(database)/documents/chapterInvitations/$(inviteId)).data;
+    }
+
+    function validSelfActivatedProfile(uid) {
+      let invite = inviteAfter(request.resource.data.activationInvitationId);
+      return signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasAll([
+          'displayName', 'email', 'systemRole', 'accountStatus',
+          'primaryChapterId', 'primaryChapterRole', 'activationInvitationId',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'displayName', 'email', 'systemRole', 'accountStatus',
+          'primaryChapterId', 'primaryChapterRole', 'activationInvitationId',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 2
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.accountStatus == 'active'
+        && request.resource.data.systemRole in ['director', 'adviser']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && invite.status == 'claimed'
+        && invite.claimedByUid == uid
+        && invite.email == request.auth.token.email
+        && invite.role == request.resource.data.systemRole
+        && invite.chapterId == request.resource.data.primaryChapterId
+        && invite.role == request.resource.data.primaryChapterRole
+        && invite.expiresAt > request.time;
+    }
+
+    function validInvitationClaim(inviteId) {
+      let membershipId = resource.data.chapterId + '__' + request.auth.uid;
+      let membership = getAfter(/databases/$(database)/documents/chapterMemberships/$(membershipId)).data;
+      return signedIn()
+        && resource.data.status == 'pending'
+        && resource.data.expiresAt > request.time
+        && resource.data.email == request.auth.token.email
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'claimedByUid', 'claimedAt', 'updatedAt'
+        ])
+        && request.resource.data.status == 'claimed'
+        && request.resource.data.claimedByUid == request.auth.uid
+        && request.resource.data.claimedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && membership.uid == request.auth.uid
+        && membership.chapterId == resource.data.chapterId
+        && membership.role == resource.data.role
+        && membership.invitationId == inviteId
+        && membership.status == 'active';
+    }
+
+    function validSelfMembership(membershipId) {
+      let invite = inviteAfter(request.resource.data.invitationId);
+      let user = getAfter(/databases/$(database)/documents/systemUsers/$(request.auth.uid)).data;
+      return signedIn()
+        && request.resource.data.keys().hasAll([
+          'uid', 'email', 'displayName', 'chapterId', 'chapterName', 'role',
+          'status', 'invitationId', 'grantedBy', 'grantedAt',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'chapterId', 'chapterName', 'role',
+          'status', 'invitationId', 'grantedBy', 'grantedAt',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && membershipId == request.resource.data.chapterId + '__' + request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 2
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.role in ['director', 'adviser']
+        && request.resource.data.status == 'active'
+        && request.resource.data.grantedBy == 'invitation'
+        && request.resource.data.grantedAt == request.time
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && invite.status == 'claimed'
+        && invite.claimedByUid == request.auth.uid
+        && invite.email == request.auth.token.email
+        && invite.chapterId == request.resource.data.chapterId
+        && invite.chapterName == request.resource.data.chapterName
+        && invite.role == request.resource.data.role
+        && invite.expiresAt > request.time
+        && user.email == request.auth.token.email
+        && user.accountStatus == 'active';
     }
 
     match /systemUsers/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow read: if isAdministrativeStaff();
-      allow create, delete: if isOwner();
+
+      allow create: if isOwner() || validSelfActivatedProfile(uid);
+      allow delete: if isOwner();
 
       allow update: if signedIn()
         && request.auth.uid == uid
@@ -58,6 +169,68 @@ service cloud.firestore {
     match /publicChapterRegistry/{chapterId} {
       allow get, list: if resource.data.isPublished == true;
       allow create, update, delete: if canManageRegistry();
+    }
+
+    // Phase 3 invitation records use the SHA-256 activation-code hash as the
+    // document ID. Unauthenticated users may retrieve only pending, unexpired
+    // records by exact document ID; collection listing remains staff-only.
+    match /chapterInvitations/{inviteId} {
+      allow get: if resource.data.status == 'pending'
+        && resource.data.expiresAt > request.time;
+      allow list: if canManageInvitations();
+
+      allow create: if canManageInvitations()
+        && request.resource.data.keys().hasAll([
+          'activationCodeHash', 'codeHint', 'email', 'displayName',
+          'chapterId', 'chapterName', 'role', 'status', 'expiresAt',
+          'note', 'version', 'createdByUid', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'activationCodeHash', 'codeHint', 'email', 'displayName',
+          'chapterId', 'chapterName', 'role', 'status', 'expiresAt',
+          'note', 'version', 'createdByUid', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.activationCodeHash == inviteId
+        && request.resource.data.codeHint is string
+        && request.resource.data.codeHint.size() == 5
+        && request.resource.data.email is string
+        && request.resource.data.email.size() >= 5
+        && request.resource.data.email.size() <= 160
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 2
+        && request.resource.data.displayName.size() <= 80
+        && request.resource.data.chapterId is string
+        && request.resource.data.chapterId.size() == 18
+        && request.resource.data.chapterName is string
+        && request.resource.data.chapterName.size() >= 2
+        && request.resource.data.chapterName.size() <= 180
+        && request.resource.data.role in ['director', 'adviser']
+        && request.resource.data.status == 'pending'
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.note is string
+        && request.resource.data.note.size() <= 500
+        && request.resource.data.version == 1
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && get(/databases/$(database)/documents/publicChapterRegistry/$(request.resource.data.chapterId)).data.isPublished == true
+        && get(/databases/$(database)/documents/publicChapterRegistry/$(request.resource.data.chapterId)).data.officialName == request.resource.data.chapterName;
+
+      allow update: if canManageInvitations() || validInvitationClaim(inviteId);
+      allow delete: if isOwner();
+    }
+
+    // One immutable access record per user and chapter. Phase 4 will consume
+    // these records to build the Director and Adviser workspaces.
+    match /chapterMemberships/{membershipId} {
+      allow read: if isAdministrativeStaff();
+      allow read: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && request.auth.token.email_verified == true;
+
+      allow create: if canManageInvitations() || validSelfMembership(membershipId);
+      allow update, delete: if canManageInvitations();
     }
 
     // Phase 2 public concern reports. Creation is intentionally narrow and
