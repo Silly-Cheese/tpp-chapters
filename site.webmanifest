@@ -1,0 +1,17 @@
+{
+  "name": "The Prayer Project Chapter Portal",
+  "short_name": "TPP Chapters",
+  "description": "Chapter Registry and Operations Portal for The Prayer Project.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f2e7",
+  "theme_color": "#151411",
+  "icons": [
+    {
+      "src": "assets/brand-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
