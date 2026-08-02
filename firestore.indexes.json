@@ -1,4 +1,22 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "publicChapterRegistry",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isPublished", "order": "ASCENDING" },
+        { "fieldPath": "officialName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "publicChapterRegistry",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isPublished", "order": "ASCENDING" },
+        { "fieldPath": "searchTokens", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "officialName", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }
