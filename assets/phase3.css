@@ -1,0 +1,809 @@
+/* Phase 3 — Account invitations, activation, and email verification */
+.phase3-root,
+.phase3-admin-shell {
+  min-height: 100vh;
+  color: var(--ink);
+}
+
+.phase3-header {
+  position: sticky;
+  top: 0;
+  z-index: 130;
+  border-bottom: 1px solid color-mix(in srgb, var(--line), transparent 15%);
+  background: color-mix(in srgb, var(--paper), transparent 6%);
+  backdrop-filter: blur(18px);
+}
+
+.phase3-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  width: min(calc(100% - 36px), 1180px);
+  min-height: 76px;
+  margin: 0 auto;
+}
+
+.phase3-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.phase3-main {
+  width: min(calc(100% - 36px), 1180px);
+  min-height: calc(100vh - 150px);
+  margin: 0 auto;
+  padding: clamp(58px, 8vw, 104px) 0;
+}
+
+.phase3-main-compact {
+  display: grid;
+  place-items: center;
+}
+
+.phase3-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  width: min(calc(100% - 36px), 1180px);
+  margin: 0 auto;
+  padding: 24px 0 34px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .82rem;
+}
+
+.phase3-activation-grid {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(420px, 1.1fr);
+  gap: clamp(42px, 8vw, 100px);
+  align-items: center;
+}
+
+.phase3-activation-copy h1,
+.phase3-message-card h1,
+.phase3-admin-heading h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 600;
+  letter-spacing: -.035em;
+  line-height: 1.04;
+}
+
+.phase3-activation-copy h1 {
+  max-width: 680px;
+  font-size: clamp(3rem, 6vw, 5.7rem);
+}
+
+.phase3-activation-copy > p:not(.phase3-kicker) {
+  max-width: 660px;
+  margin: 24px 0 0;
+  color: var(--muted);
+  font-size: 1.08rem;
+}
+
+.phase3-kicker {
+  margin: 0 0 12px;
+  color: var(--gold-dark);
+  font-size: .74rem;
+  font-weight: 850;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+
+.phase3-trust-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 34px;
+}
+
+.phase3-trust-list > div {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 13px;
+  align-items: center;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--paper), transparent 3%);
+}
+
+.phase3-trust-list .icon {
+  width: 25px;
+  height: 25px;
+  color: var(--gold-dark);
+}
+
+.phase3-trust-list span {
+  color: var(--muted);
+  font-size: .92rem;
+}
+
+.phase3-trust-list strong {
+  display: block;
+  color: var(--ink);
+}
+
+.phase3-card {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--paper), transparent 2%);
+  box-shadow: var(--shadow-lg);
+}
+
+.phase3-activation-card {
+  padding: clamp(26px, 4vw, 42px);
+}
+
+.phase3-card-heading {
+  margin-bottom: 24px;
+}
+
+.phase3-card-heading h2,
+.phase3-security-card h2,
+.phase3-list-heading h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.75rem, 3vw, 2.4rem);
+  line-height: 1.12;
+}
+
+.phase3-card-heading p,
+.phase3-list-heading p,
+.phase3-security-card p {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.phase3-step {
+  display: inline-flex;
+  margin-bottom: 10px;
+  color: var(--gold-dark);
+  font-size: .73rem;
+  font-weight: 850;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.phase3-code-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1rem;
+  font-weight: 750;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.phase3-form-note {
+  margin: 19px 0 0;
+  color: var(--muted);
+  font-size: .8rem;
+  text-align: center;
+}
+
+.phase3-invite-details {
+  display: grid;
+  gap: 0;
+  margin: 32px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+}
+
+.phase3-invite-details > div {
+  display: grid;
+  grid-template-columns: 145px 1fr;
+  gap: 18px;
+  padding: 14px 17px;
+  border-bottom: 1px solid var(--line);
+}
+
+.phase3-invite-details > div:last-child {
+  border-bottom: 0;
+}
+
+.phase3-invite-details dt {
+  color: var(--muted);
+  font-size: .8rem;
+  font-weight: 750;
+}
+
+.phase3-invite-details dd {
+  margin: 0;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.phase3-segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 24px 0 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--cream);
+}
+
+.phase3-segmented button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--muted);
+  background: transparent;
+  font-weight: 800;
+}
+
+.phase3-segmented button.active {
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+}
+
+.phase3-consent {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  align-items: start;
+  color: var(--muted);
+  font-size: .84rem;
+}
+
+.phase3-consent input {
+  width: 17px;
+  height: 17px;
+  margin-top: 2px;
+  accent-color: var(--gold-dark);
+}
+
+.phase3-centered-link {
+  display: block;
+  text-align: center;
+}
+
+.phase3-back-link {
+  display: block;
+  margin: 19px auto 0;
+  border: 0;
+  color: var(--gold-dark);
+  background: transparent;
+  font-size: .84rem;
+  font-weight: 800;
+}
+
+.phase3-back-link:hover {
+  text-decoration: underline;
+}
+
+.phase3-message-card {
+  width: min(100%, 680px);
+  padding: clamp(34px, 6vw, 66px);
+  text-align: center;
+}
+
+.phase3-message-card h1 {
+  font-size: clamp(2.5rem, 6vw, 4.6rem);
+}
+
+.phase3-message-card > p:not(.phase3-kicker) {
+  max-width: 570px;
+  margin: 18px auto 0;
+  color: var(--muted);
+  font-size: 1.03rem;
+}
+
+.phase3-message-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 22px;
+  border: 1px solid color-mix(in srgb, var(--gold), transparent 45%);
+  border-radius: 50%;
+  color: var(--gold-dark);
+  background: color-mix(in srgb, var(--cream-deep), transparent 20%);
+}
+
+.phase3-message-icon .icon {
+  width: 29px;
+  height: 29px;
+}
+
+.phase3-success-card {
+  border-color: color-mix(in srgb, var(--success), transparent 55%);
+}
+
+.phase3-success-icon {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success), transparent 55%);
+  background: var(--success-bg);
+}
+
+.phase3-button-stack {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 410px);
+  margin: 30px auto 0;
+}
+
+.phase3-membership-summary {
+  display: grid;
+  gap: 10px;
+  margin: 28px auto 0;
+  max-width: 520px;
+}
+
+.phase3-membership-summary > span,
+.phase3-table-state > span {
+  color: var(--muted);
+}
+
+.phase3-membership-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  text-align: left;
+}
+
+.phase3-membership-item div {
+  display: grid;
+}
+
+.phase3-membership-item span:not(.badge) {
+  color: var(--muted);
+  font-size: .8rem;
+}
+
+.phase3-admin-shell {
+  display: grid;
+  grid-template-columns: 278px 1fr;
+  background: var(--cream);
+}
+
+.phase3-admin-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 24px 18px;
+  border-right: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.phase3-admin-brand {
+  padding: 4px 8px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.phase3-admin-nav {
+  display: grid;
+  gap: 5px;
+  margin-top: 24px;
+}
+
+.phase3-admin-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 10px 13px;
+  border-radius: 11px;
+  color: var(--muted);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.phase3-admin-link:hover,
+.phase3-admin-link.active {
+  color: var(--ink);
+  background: var(--cream);
+}
+
+.phase3-admin-link.active {
+  box-shadow: inset 3px 0 var(--gold);
+}
+
+.phase3-admin-user {
+  display: grid;
+  margin-top: auto;
+  padding: 18px 10px 4px;
+  border-top: 1px solid var(--line);
+}
+
+.phase3-admin-user span {
+  color: var(--muted);
+  font-size: .78rem;
+}
+
+.phase3-admin-main {
+  min-width: 0;
+}
+
+.phase3-admin-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 76px;
+  padding: 12px 30px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper), transparent 5%);
+  backdrop-filter: blur(16px);
+}
+
+.phase3-admin-topbar > div {
+  display: grid;
+}
+
+.phase3-admin-topbar .phase3-kicker {
+  margin: 0;
+}
+
+.phase3-admin-content {
+  width: min(calc(100% - 48px), 1220px);
+  margin: 0 auto;
+  padding: 48px 0 74px;
+}
+
+.phase3-admin-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 26px;
+}
+
+.phase3-admin-heading h1 {
+  font-size: clamp(2.6rem, 5vw, 4.7rem);
+}
+
+.phase3-admin-heading p:not(.phase3-kicker) {
+  max-width: 670px;
+  margin: 14px 0 0;
+  color: var(--muted);
+}
+
+.phase3-admin-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr);
+  gap: 18px;
+}
+
+.phase3-admin-grid > .phase3-card {
+  padding: clamp(24px, 3vw, 34px);
+}
+
+.phase3-security-card {
+  align-self: start;
+  box-shadow: var(--shadow-sm);
+}
+
+.phase3-security-card .phase3-message-icon {
+  margin: 0 0 20px;
+}
+
+.phase3-security-card ul {
+  display: grid;
+  gap: 10px;
+  margin: 22px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+.phase3-textarea {
+  min-height: 105px;
+  resize: vertical;
+}
+
+.phase3-optional {
+  color: var(--muted);
+  font-size: .75rem;
+  font-weight: 600;
+}
+
+.phase3-issued-panel {
+  display: grid;
+  grid-template-columns: minmax(230px, .85fr) minmax(300px, 1fr);
+  gap: 20px 28px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--success), transparent 52%);
+  border-radius: 19px;
+  background: var(--success-bg);
+}
+
+.phase3-issued-panel h3 {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: 1.55rem;
+}
+
+.phase3-issued-panel p:not(.phase3-kicker) {
+  margin: 7px 0 0;
+  color: var(--success);
+  font-size: .86rem;
+}
+
+.phase3-issued-code {
+  padding: 16px;
+  border: 1px dashed color-mix(in srgb, var(--success), transparent 35%);
+  border-radius: 12px;
+  background: var(--paper);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: clamp(.92rem, 2vw, 1.23rem);
+  font-weight: 850;
+  letter-spacing: .04em;
+  text-align: center;
+}
+
+.phase3-issued-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.phase3-invitation-list-card {
+  margin-top: 18px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.phase3-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 24px 26px;
+  border-bottom: 1px solid var(--line);
+}
+
+.phase3-list-heading h2 {
+  font-size: 1.65rem;
+}
+
+.phase3-table-wrap {
+  overflow-x: auto;
+}
+
+.phase3-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .88rem;
+}
+
+.phase3-table th,
+.phase3-table td {
+  padding: 15px 18px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.phase3-table th {
+  color: var(--muted);
+  background: var(--cream);
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.phase3-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.phase3-table td > span:not(.badge) {
+  display: block;
+  color: var(--muted);
+  font-size: .76rem;
+}
+
+.phase3-table-state {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  padding: 54px 24px;
+  text-align: center;
+}
+
+.btn-small {
+  min-height: 34px;
+  padding: 7px 12px;
+  font-size: .78rem;
+}
+
+.phase3-login-link {
+  display: flex;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 15px;
+  color: var(--muted);
+  font-size: .83rem;
+}
+
+.phase3-header-activate {
+  color: var(--gold-dark);
+  font-size: .82rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.phase3-header-activate:hover {
+  text-decoration: underline;
+}
+
+.alert span {
+  display: block;
+}
+
+@media (max-width: 960px) {
+  .phase3-activation-grid,
+  .phase3-admin-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .phase3-activation-copy {
+    text-align: center;
+  }
+
+  .phase3-activation-copy > p:not(.phase3-kicker) {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .phase3-trust-list {
+    text-align: left;
+  }
+
+  .phase3-admin-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .phase3-admin-sidebar {
+    position: static;
+    display: block;
+    height: auto;
+    padding: 14px 18px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .phase3-admin-brand,
+  .phase3-admin-user {
+    display: none;
+  }
+
+  .phase3-admin-nav {
+    display: flex;
+    gap: 6px;
+    margin: 0;
+    overflow-x: auto;
+  }
+
+  .phase3-admin-link {
+    flex: 0 0 auto;
+  }
+
+  .phase3-admin-topbar {
+    top: 75px;
+  }
+}
+
+@media (max-width: 680px) {
+  .phase3-header-inner,
+  .phase3-footer {
+    width: min(calc(100% - 24px), 1180px);
+  }
+
+  .phase3-header-actions .btn-secondary:first-child,
+  .phase3-header-activate {
+    display: none;
+  }
+
+  .phase3-main {
+    width: min(calc(100% - 24px), 1180px);
+    padding: 40px 0 60px;
+  }
+
+  .phase3-activation-grid {
+    gap: 28px;
+  }
+
+  .phase3-activation-copy h1 {
+    font-size: clamp(2.65rem, 14vw, 4rem);
+  }
+
+  .phase3-activation-card,
+  .phase3-message-card,
+  .phase3-admin-grid > .phase3-card {
+    padding: 23px;
+    border-radius: 18px;
+  }
+
+  .phase3-invite-details > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .phase3-segmented,
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .phase3-footer,
+  .phase3-admin-heading,
+  .phase3-list-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .phase3-admin-content {
+    width: min(calc(100% - 24px), 1220px);
+    padding-top: 34px;
+  }
+
+  .phase3-admin-topbar {
+    top: 75px;
+    padding: 11px 14px;
+  }
+
+  .phase3-admin-topbar .btn {
+    min-height: 38px;
+    padding: 8px 12px;
+  }
+
+  .phase3-issued-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .phase3-issued-actions {
+    grid-column: auto;
+  }
+
+  .phase3-issued-actions .btn {
+    width: 100%;
+  }
+
+  .phase3-membership-item {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media print {
+  .phase3-header,
+  .phase3-footer,
+  .phase3-admin-sidebar,
+  .phase3-admin-topbar,
+  .phase3-issued-actions,
+  .phase3-list-heading .btn,
+  .toast-region {
+    display: none !important;
+  }
+
+  .phase3-admin-shell,
+  .phase3-root {
+    display: block;
+    background: #fff;
+  }
+
+  .phase3-admin-content,
+  .phase3-main {
+    width: 100%;
+    padding: 0;
+  }
+
+  .phase3-card {
+    box-shadow: none;
+  }
+}
