@@ -1,0 +1,59 @@
+name: Apply invitation-code activation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'scripts/apply_no_email_verification.py'
+      - '.github/workflows/apply-no-email-verification.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'fix/no-email-verification'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/no-email-verification
+          fetch-depth: 0
+
+      - name: Apply invitation-code activation migration
+        run: python3 scripts/apply_no_email_verification.py
+
+      - name: Validate implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            node --input-type=module --check < "$file"
+          done < <(find assets/js -type f -name '*.js' -print0 | sort -z)
+          python3 scripts/validate_repository.py
+          python3 scripts/validate_chapter_id_format.py
+          python3 scripts/validate_portal_routing.py
+          python3 scripts/validate_workspace_invitation_activation.py
+          python3 scripts/validate_create_chapter_portal.py
+          python3 scripts/validate_no_email_verification.py
+          python3 - <<'PY'
+          from pathlib import Path
+          for path in [*Path('assets/js').glob('*.js'), Path('firestore.rules'), Path('storage.rules')]:
+              text = path.read_text()
+              for marker in ('emailVerified', 'email_verified', 'sendEmailVerification'):
+                  assert marker not in text, f'{marker} remains in {path}'
+          print('No email-verification access dependency remains.')
+          PY
+
+      - name: Commit fix and remove migration files
+        run: |
+          rm -f .github/workflows/apply-no-email-verification.yml
+          rm -f scripts/apply_no_email_verification.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Use invitation codes without email verification"
+          git push origin HEAD:fix/no-email-verification
