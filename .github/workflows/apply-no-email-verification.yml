@@ -42,10 +42,13 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
+
           for name in ('firestore.rules', 'storage.rules'):
               path = Path(name)
               text = path.read_text()
-              text = re.sub(r'^\s*&&\s*request\.auth\.token\.email_verified\s*==\s*true\s*\n', '', text, flags=re.M)
+              text = text.replace('request.auth.token.email_verified == true', 'true')
+              text = re.sub(r'^\s*&&\s*true\s*\n', '', text, flags=re.M)
+              text = re.sub(r'\|\|\s*true\s*;', ';', text)
               path.write_text(text)
           PY
 
