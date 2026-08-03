@@ -6,14 +6,11 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function userRecord() {
-      return firestore.get(/databases/(default)/documents/systemUsers/$(request.auth.uid)).data;
-    }
-
     function isAdministrativeReviewer() {
+      let user = firestore.get(/databases/(default)/documents/systemUsers/$(request.auth.uid)).data;
       return signedIn()
-        && userRecord().accountStatus == 'active'
-        && userRecord().systemRole in ['owner', 'chapterAdmin', 'complianceAdmin'];
+        && user.accountStatus == 'active'
+        && user.systemRole in ['owner', 'chapterAdmin', 'complianceAdmin'];
     }
 
     function membershipKey(chapterId) {
@@ -21,13 +18,17 @@ service firebase.storage {
     }
 
     function hasChapterMembership(chapterId) {
+      let membership = firestore.get(/databases/(default)/documents/chapterMemberships/$(membershipKey(chapterId))).data;
       return signedIn()
         && request.auth.token.email_verified == true
-        && firestore.get(/databases/(default)/documents/chapterMemberships/$(membershipKey(chapterId))).data.status == 'active';
+        && membership.status == 'active';
     }
 
-    function submission(submissionId) {
-      return firestore.get(/databases/(default)/documents/chapterSubmissions/$(submissionId)).data;
+    function ownsEditableSubmission(chapterId, submissionId) {
+      let item = firestore.get(/databases/(default)/documents/chapterSubmissions/$(submissionId)).data;
+      return item.chapterId == chapterId
+        && item.submittedByUid == request.auth.uid
+        && item.status in ['draft', 'changes_requested'];
     }
 
     function allowedContentType() {
@@ -46,9 +47,7 @@ service firebase.storage {
       allow create, update: if signedIn()
         && request.auth.uid == uid
         && hasChapterMembership(chapterId)
-        && submission(submissionId).chapterId == chapterId
-        && submission(submissionId).submittedByUid == request.auth.uid
-        && submission(submissionId).status in ['draft', 'changes_requested']
+        && ownsEditableSubmission(chapterId, submissionId)
         && request.resource.size > 0
         && request.resource.size <= 10 * 1024 * 1024
         && allowedContentType();
@@ -57,9 +56,7 @@ service firebase.storage {
         || (signedIn()
           && request.auth.uid == uid
           && hasChapterMembership(chapterId)
-          && submission(submissionId).chapterId == chapterId
-          && submission(submissionId).submittedByUid == request.auth.uid
-          && submission(submissionId).status in ['draft', 'changes_requested']);
+          && ownsEditableSubmission(chapterId, submissionId));
     }
 
     match /{allPaths=**} {
