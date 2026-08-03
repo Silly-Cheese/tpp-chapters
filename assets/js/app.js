@@ -806,19 +806,31 @@ async function runRegistrySearch(rawQuery) {
       root.innerHTML = registryError("Search needs more detail", "Enter at least two letters or use a full Chapter ID.");
       return;
     }
-    const registryQuery = query(
+    const snapshot = await getDocs(query(
       collection(db, "publicChapterRegistry"),
-      where("isPublished", "==", true),
-      where("searchTokens", "array-contains", token),
-      orderBy("officialName", "asc"),
-      limit(20)
-    );
-    const snapshot = await getDocs(registryQuery);
-    const records = snapshot.docs.map(recordFromSnapshot);
+      where("isPublished", "==", true)
+    ));
+    const normalizedPhrase = searchTerm.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+    const records = snapshot.docs
+      .map(recordFromSnapshot)
+      .filter((record) => {
+        const searchable = [
+          record.chapterId,
+          record.officialName,
+          record.hostInstitutionName,
+          record.city,
+          record.state,
+          record.country,
+          ...(Array.isArray(record.searchTokens) ? record.searchTokens : [])
+        ].join(" ").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+        return searchable.includes(normalizedPhrase) || searchable.split(/\s+/).includes(token);
+      })
+      .sort((a, b) => String(a.officialName || a.chapterId).localeCompare(String(b.officialName || b.chapterId)))
+      .slice(0, 20);
     root.innerHTML = records.length ? searchResultsMarkup(records, searchTerm) : registryNoMatches(searchTerm);
   } catch (error) {
     console.error("Registry search failed.", error);
-    root.innerHTML = registryError("Search unavailable", "The registry query could not be completed. The required Firestore index may still be building or the security rules may not be deployed.");
+    root.innerHTML = registryError("Search unavailable", "The registry query could not be completed. The public registry rules may not be deployed or the service may be temporarily unavailable.");
   }
 }
 
@@ -841,20 +853,22 @@ async function loadDirectory({ reset = false } = {}) {
   }
   state.directory.loading = true;
   try {
-    const constraints = [where("isPublished", "==", true), orderBy("officialName", "asc"), limit(24)];
-    if (state.directory.cursor) constraints.splice(2, 0, startAfter(state.directory.cursor));
-    const snapshot = await getDocs(query(collection(db, "publicChapterRegistry"), ...constraints));
-    const newRecords = snapshot.docs.map(recordFromSnapshot);
-    state.directory.records.push(...newRecords);
-    state.directory.cursor = snapshot.docs.at(-1) || state.directory.cursor;
-    state.directory.hasMore = snapshot.docs.length === 24;
+    const snapshot = await getDocs(query(
+      collection(db, "publicChapterRegistry"),
+      where("isPublished", "==", true)
+    ));
+    state.directory.records = snapshot.docs
+      .map(recordFromSnapshot)
+      .sort((a, b) => String(a.officialName || a.chapterId).localeCompare(String(b.officialName || b.chapterId)));
+    state.directory.cursor = null;
+    state.directory.hasMore = false;
     state.directory.loaded = true;
     root.innerHTML = directoryMarkup();
     bindDynamicRegistryEvents();
   } catch (error) {
     console.error("Unable to load chapter directory.", error);
     state.directory.error = error;
-    root.innerHTML = registryError("Directory unavailable", "The directory could not be loaded. Confirm that the public registry index and security rules are deployed.");
+    root.innerHTML = registryError("Directory unavailable", "The directory could not be loaded. Confirm that the public registry rules are deployed.");
   } finally {
     state.directory.loading = false;
   }

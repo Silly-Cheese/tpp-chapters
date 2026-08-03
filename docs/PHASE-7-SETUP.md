@@ -5,7 +5,7 @@
 ```bash
 firebase login
 firebase use tpp-chapters
-firebase deploy --only firestore:rules,firestore:indexes,storage
+firebase deploy --only firestore:rules,storage
 ```
 
 Phase 7 does not add a new index, but deploying the complete configuration ensures all Phase 1–6 rules and indexes remain current.

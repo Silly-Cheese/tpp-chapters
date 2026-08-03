@@ -43,5 +43,5 @@ Phase 7 uses the existing Phase 1–6 collections and permissions. It does not r
 Deploy the current repository configuration after merging:
 
 ```bash
-firebase deploy --only firestore:rules,firestore:indexes,storage
+firebase deploy --only firestore:rules,storage
 ```

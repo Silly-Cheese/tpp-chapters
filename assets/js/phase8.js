@@ -5,7 +5,8 @@ import {
   getDoc,
   getDocs,
   limit,
-  query
+  query,
+  where
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
 import { auth, db, authPersistenceReady } from "./firebase.js";
 
@@ -278,10 +279,13 @@ async function runDiagnostics() {
 
   for (const collectionName of COLLECTION_CHECKS) {
     try {
-      await getDocs(query(collection(db, collectionName), limit(1)));
-      add(`Firestore: ${collectionName}`, "pass", "The current administrator can read this collection.");
+      const healthQuery = collectionName === "publicChapterRegistry"
+        ? query(collection(db, collectionName), where("isPublished", "==", true), limit(1))
+        : query(collection(db, collectionName), limit(1));
+      await getDocs(healthQuery);
+      add(`Firestore: ${collectionName}`, "pass", "The current administrator can perform the read used by this portal area.");
     } catch (error) {
-      add(`Firestore: ${collectionName}`, "fail", error?.message || "Firestore denied or failed this collection read.");
+      add(`Firestore: ${collectionName}`, "fail", error?.message || "Firestore denied or failed this portal read.");
     }
   }
 

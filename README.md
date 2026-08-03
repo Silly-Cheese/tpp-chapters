@@ -75,6 +75,10 @@ The Firebase web configuration is public client configuration by design. Never c
 - Continuous GitHub Actions validation
 - Security policy, role matrix, and final production checklist
 
+## Firestore indexes
+
+The portal does not require custom composite indexes. Registry search and sorting use a single-field published-record query followed by client-side filtering and sorting. Support-ticket access uses equality filters that Firestore serves through automatic single-field indexes and index merging.
+
 ## Required Firebase setup
 
 ### Authentication
@@ -89,7 +93,7 @@ The Firebase web configuration is public client configuration by design. Never c
 ```bash
 firebase login
 firebase use tpp-chapters
-firebase deploy --only firestore:rules,firestore:indexes,storage
+firebase deploy --only firestore:rules,storage
 ```
 
 New or changed Firestore indexes can take several minutes to become available.
