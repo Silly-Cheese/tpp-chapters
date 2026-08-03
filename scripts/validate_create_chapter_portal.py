@@ -23,8 +23,8 @@ for marker in required:
 
 if 'Create or import this Chapter ID in <code>publicChapterRegistry</code>' in phase4:
     errors.append("The portal still instructs administrators to create the chapter manually in Firestore")
-if '20260803.6' not in index:
-    errors.append("Production assets were not bumped to build 20260803.6")
+if '20260803.7' not in index:
+    errors.append("Production assets were not bumped to build 20260803.7")
 
 build_match = re.search(r'<meta name="tpp-build" content="([^"]+)">', index)
 if not build_match:
