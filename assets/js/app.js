@@ -67,6 +67,8 @@ const STANDING_LABELS = Object.freeze({
 });
 
 const ACTIVE_ACCOUNT_STATUSES = new Set(["active"]);
+const ADMIN_PORTAL_ROLES = new Set(["owner", "chapterAdmin", "complianceAdmin", "supportAgent"]);
+const CHAPTER_PORTAL_ROLES = new Set(["director", "adviser", "chapterUser"]);
 const DIRECT_ID_PATTERN = /^TPP-CH-[A-Z0-9]{1,32}$/;
 
 const icons = {
@@ -254,7 +256,7 @@ function publicLayout(content) {
         ${publicNavigation()}
         <div class="header-actions">
           ${themeButton()}
-          ${state.user ? `<a class="btn btn-primary" href="#/dashboard">Open portal</a>` : `<a class="btn btn-primary" href="#/login">Sign in</a>`}
+          <a class="btn btn-primary" href="#/portal">${state.user ? portalButtonLabel() : "Portal access"}</a>
         </div>
       </div>
     </header>
@@ -482,9 +484,30 @@ function authLayout(content) {
     <div class="toast-region" id="toast-region" aria-live="assertive"></div>`;
 }
 
+function portalAccessPage() {
+  if (state.user && state.profile && ACTIVE_ACCOUNT_STATUSES.has(state.profile.accountStatus)) {
+    const destination = portalHomeForRole();
+    queueMicrotask(() => navigate(destination));
+    return loadingScreen(destination.startsWith("/admin/") ? "Opening the administration console…" : "Opening your chapter workspace…");
+  }
+  return publicLayout(`
+    <section class="portal-access-shell">
+      <article class="portal-access-card">
+        <p class="eyebrow">Chapter Registry & Operations Portal</p>
+        <h1>One portal for every approved chapter.</h1>
+        <p>The public registry is only the verification side of the system. Authorized accounts open the complete administration, Director, or Adviser workspace after sign-in.</p>
+        <div class="portal-access-grid">
+          <div class="portal-access-option"><strong>Administration</strong><span>Manage chapters, users, invitations, compliance, submissions, support, notices, registry records, settings, and audit history.</span></div>
+          <div class="portal-access-option"><strong>Chapter leadership</strong><span>Review standing, requirements, leadership, documents, notices, reports, renewals, events, and support conversations.</span></div>
+        </div>
+        <div class="portal-access-actions"><a class="btn btn-primary" href="#/login">Sign in to the portal</a><a class="btn btn-secondary" href="#/activate">Activate an approved account</a><a class="btn btn-secondary" href="#/verify">Return to verification</a></div>
+      </article>
+    </section>`);
+}
+
 function loginPage() {
   if (state.user && state.profile && ACTIVE_ACCOUNT_STATUSES.has(state.profile.accountStatus)) {
-    queueMicrotask(() => navigate("/dashboard"));
+    queueMicrotask(() => navigate("/portal"));
     return loadingScreen("Opening your dashboard…");
   }
   return authLayout(`
@@ -520,6 +543,18 @@ function profileStatusBadge(profile) {
   return `<span class="badge ${className}">${escapeHTML(titleCase(status))}</span>`;
 }
 
+function portalHomeForRole(role = state.profile?.systemRole) {
+  if (ADMIN_PORTAL_ROLES.has(role)) return "/admin/dashboard";
+  if (CHAPTER_PORTAL_ROLES.has(role)) return "/chapter/overview";
+  return "/dashboard";
+}
+
+function portalButtonLabel() {
+  if (ADMIN_PORTAL_ROLES.has(state.profile?.systemRole)) return "Administration console";
+  if (CHAPTER_PORTAL_ROLES.has(state.profile?.systemRole)) return "My chapter";
+  return "Open portal";
+}
+
 function appLayout(content, activeRoute = "/dashboard", title = "Chapter Portal") {
   const profile = state.profile || {};
   const displayName = profile.displayName || state.user?.displayName || state.user?.email?.split("@")[0] || "Portal User";
@@ -530,7 +565,7 @@ function appLayout(content, activeRoute = "/dashboard", title = "Chapter Portal"
         <div class="sidebar-brand">${brand()}</div>
         <nav class="sidebar-nav" aria-label="Portal navigation">
           <p class="nav-label">Workspace</p>
-          <a class="nav-link ${activeRoute === "/dashboard" ? "active" : ""}" href="#/dashboard">${icons.home}<span>Overview</span></a>
+          <a class="nav-link ${activeRoute === "/dashboard" ? "active" : ""}" href="#${portalHomeForRole()}">${icons.home}<span>Overview</span></a>
           <a class="nav-link" href="#/verify">${icons.shield}<span>Public registry</span></a>
           <a class="nav-link ${activeRoute === "/profile" ? "active" : ""}" href="#/profile">${icons.user}<span>My profile</span></a>
           <a class="nav-link ${activeRoute === "/system-status" ? "active" : ""}" href="#/system-status">${icons.status}<span>System status</span></a>
@@ -551,12 +586,12 @@ function ownerDashboard() {
   const profile = state.profile;
   const displayName = profile.displayName || state.user.email.split("@")[0];
   return appLayout(`
-    <header class="page-heading"><div><p class="page-kicker">Owner workspace</p><h1>Welcome, ${escapeHTML(displayName)}.</h1><p>The Phase 2 public registry is now connected to Firestore and available to schools, churches, families, volunteers, and community members.</p></div><span class="badge badge-success">Registry operational</span></header>
+    <header class="page-heading"><div><p class="page-kicker">Owner workspace</p><h1>Welcome, ${escapeHTML(displayName)}.</h1><p>The complete Chapter Registry & Operations Portal is available for public verification, chapter leadership, support, and administration.</p></div><span class="badge badge-success">Registry operational</span></header>
     <section class="grid grid-4" aria-label="Platform metrics">
       <article class="card metric-card"><div class="metric-label">Account role</div><div class="metric-value">${escapeHTML(roleLabel(profile.systemRole))}</div><div class="metric-note">Loaded from Firestore</div></article>
       <article class="card metric-card"><div class="metric-label">Public registry</div><div class="metric-value">Online</div><div class="metric-note">Published records are searchable</div></article>
       <article class="card metric-card"><div class="metric-label">Firebase project</div><div class="metric-value">${escapeHTML(firebaseConfig.projectId)}</div><div class="metric-note">Production configuration connected</div></article>
-      <article class="card metric-card"><div class="metric-label">Current phase</div><div class="metric-value">Phase 2</div><div class="metric-note">Public registry and verification</div></article>
+      <article class="card metric-card"><div class="metric-label">Platform</div><div class="metric-value">Complete</div><div class="metric-note">Phases 1–8 are available</div></article>
     </section>
     <section class="grid grid-2" style="margin-top:18px">
       <article class="card"><div class="card-header"><div><h2 class="card-title">Registry tools</h2><p class="card-subtitle">Public-facing features now available.</p></div>${icons.shield}</div><div class="card-body"><div class="action-list"><a class="action-link" href="#/verify"><div><strong>Verify a chapter</strong><span>Test direct-ID and general registry search.</span></div>${icons.arrow}</a><a class="action-link" href="#/chapters"><div><strong>Open the directory</strong><span>Review all currently published chapter records.</span></div>${icons.arrow}</a><a class="action-link" href="#/report-chapter"><div><strong>Test public reporting</strong><span>Review the unauthorized chapter reporting workflow.</span></div>${icons.arrow}</a></div></div></article>
@@ -572,11 +607,16 @@ function roleDashboard() {
   return appLayout(`
     <header class="page-heading"><div><p class="page-kicker">Secure workspace</p><h1>Welcome, ${escapeHTML(displayName)}.</h1><p>Your ${escapeHTML(role)} account is active. Public chapter verification is now operational; chapter-specific records will connect to this workspace in Phase 4.</p></div><span class="badge badge-success">Access confirmed</span></header>
     <section class="grid grid-3"><article class="card metric-card"><div class="metric-label">Assigned role</div><div class="metric-value">${escapeHTML(role)}</div><div class="metric-note">Protected by Firestore</div></article><article class="card metric-card"><div class="metric-label">Account status</div><div class="metric-value">${escapeHTML(titleCase(profile.accountStatus))}</div><div class="metric-note">Portal access authorized</div></article><article class="card metric-card"><div class="metric-label">Workspace</div><div class="metric-value">${isChapterRole ? "Chapter" : "Administration"}</div><div class="metric-note">Role-specific routing active</div></article></section>
-    <section class="card" style="margin-top:18px"><div class="empty-state"><div class="empty-icon">${icons.shield}</div><h2>Public verification is now available</h2><p>Use the official registry to review public chapter records. Your detailed chapter standing, compliance, leadership, and documents will become available in the chapter portal phase.</p><a class="btn btn-primary" href="#/verify">Open public registry</a></div></section>`, "/dashboard", `${role} Dashboard`);
+    <section class="card" style="margin-top:18px"><div class="empty-state"><div class="empty-icon">${icons.shield}</div><h2>Public verification is now available</h2><p>Use the official registry to review public chapter records. Your chapter standing, compliance, leadership, documents, workflows, notices, and support tools are available in your chapter workspace.</p><a class="btn btn-primary" href="#/chapter/overview">Open chapter workspace</a></div></section>`, "/dashboard", `${role} Dashboard`);
 }
 
 function dashboardPage() {
-  return state.profile?.systemRole === "owner" ? ownerDashboard() : roleDashboard();
+  const destination = portalHomeForRole();
+  if (destination !== "/dashboard") {
+    queueMicrotask(() => navigate(destination));
+    return loadingScreen(destination.startsWith("/admin/") ? "Opening the administration console…" : "Opening your chapter workspace…");
+  }
+  return roleDashboard();
 }
 
 function profilePage() {
@@ -591,7 +631,7 @@ function profilePage() {
 
 function systemStatusContent() {
   const connected = Boolean(state.user && state.profile && !state.profileError);
-  return `<header class="page-heading"><div><p class="page-kicker">Platform health</p><h1>System status</h1><p>Current connection details for the Chapter Registry and Operations Portal.</p></div><span class="badge ${connected ? "badge-success" : "badge-info"}">${connected ? "Authenticated connection" : "Public site online"}</span></header><section class="grid grid-3"><article class="card metric-card"><div class="metric-label">Website</div><div class="metric-value">Online</div><div class="metric-note">GitHub Pages application loaded</div></article><article class="card metric-card"><div class="metric-label">Registry</div><div class="metric-value">Phase 2</div><div class="metric-note">Public Firestore records enabled</div></article><article class="card metric-card"><div class="metric-label">Authentication</div><div class="metric-value">${state.user ? "Signed in" : "Available"}</div><div class="metric-note">Firebase Email/Password</div></article></section><section class="card" style="margin-top:18px"><div class="card-body"><dl class="detail-list"><div class="detail-row"><dt>Project ID</dt><dd>${escapeHTML(firebaseConfig.projectId)}</dd></div><div class="detail-row"><dt>Public domain</dt><dd>chapter.ask4prayers.com</dd></div><div class="detail-row"><dt>Public registry collection</dt><dd>publicChapterRegistry</dd></div><div class="detail-row"><dt>Concern report collection</dt><dd>unauthorizedChapterReports</dd></div></dl></div></section>`;
+  return `<header class="page-heading"><div><p class="page-kicker">Platform health</p><h1>System status</h1><p>Current connection details for the Chapter Registry and Operations Portal.</p></div><span class="badge ${connected ? "badge-success" : "badge-info"}">${connected ? "Authenticated connection" : "Public site online"}</span></header><section class="grid grid-3"><article class="card metric-card"><div class="metric-label">Website</div><div class="metric-value">Online</div><div class="metric-note">GitHub Pages application loaded</div></article><article class="card metric-card"><div class="metric-label">Platform</div><div class="metric-value">Online</div><div class="metric-note">Public and protected portals enabled</div></article><article class="card metric-card"><div class="metric-label">Authentication</div><div class="metric-value">${state.user ? "Signed in" : "Available"}</div><div class="metric-note">Firebase Email/Password</div></article></section><section class="card" style="margin-top:18px"><div class="card-body"><dl class="detail-list"><div class="detail-row"><dt>Project ID</dt><dd>${escapeHTML(firebaseConfig.projectId)}</dd></div><div class="detail-row"><dt>Public domain</dt><dd>chapter.ask4prayers.com</dd></div><div class="detail-row"><dt>Public registry collection</dt><dd>publicChapterRegistry</dd></div><div class="detail-row"><dt>Concern report collection</dt><dd>unauthorizedChapterReports</dd></div></dl></div></section>`;
 }
 
 function systemStatusPage() {
@@ -609,7 +649,7 @@ function disabledAccessPage() {
 }
 
 function notFoundPage() {
-  const content = `<div class="empty-state"><div class="empty-icon">${icons.info}</div><h2>Page not found</h2><p>The address does not match a page in the Chapter Portal.</p><a class="btn btn-primary" href="${state.user ? "#/dashboard" : "#/"}">Return ${state.user ? "to dashboard" : "home"}</a></div>`;
+  const content = `<div class="empty-state"><div class="empty-icon">${icons.info}</div><h2>Page not found</h2><p>The address does not match a page in the Chapter Portal.</p><a class="btn btn-primary" href="${state.user ? `#${portalHomeForRole()}` : "#/"}">Return ${state.user ? "to dashboard" : "home"}</a></div>`;
   if (state.user && state.profile && ACTIVE_ACCOUNT_STATUSES.has(state.profile.accountStatus)) return appLayout(`<section class="card">${content}</section>`, "", "Page Not Found");
   return publicLayout(`<section class="section"><div class="section-inner"><div class="card">${content}</div></div></section>`);
 }
@@ -629,6 +669,7 @@ function routePage(route) {
     "/chapters": chapterDirectoryPage,
     "/about-verification": aboutVerificationPage,
     "/report-chapter": reportChapterPage,
+    "/portal": portalAccessPage,
     "/login": loginPage,
     "/forgot-password": forgotPasswordPage,
     "/dashboard": dashboardPage,
@@ -647,6 +688,7 @@ function pageTitle(route) {
     "/chapters": "Chapter Directory | The Prayer Project",
     "/about-verification": "About Chapter Verification | The Prayer Project",
     "/report-chapter": "Report a Chapter Concern | The Prayer Project",
+    "/portal": "Portal Access | The Prayer Project",
     "/login": "Sign In | The Prayer Project",
     "/forgot-password": "Reset Password | The Prayer Project",
     "/dashboard": "Dashboard | The Prayer Project",
@@ -950,7 +992,7 @@ async function handleLogin(form) {
   try {
     await authPersistenceReady;
     await signInWithEmailAndPassword(auth, email, password);
-    navigate("/dashboard");
+    navigate("/portal");
   } catch (error) {
     setInlineAlert("auth-alert", "danger", "Sign-in failed", friendlyAuthError(error));
   } finally {

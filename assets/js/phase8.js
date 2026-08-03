@@ -27,12 +27,13 @@ const REQUIRED_ASSETS = [
   "assets/phase7-3.css",
   "assets/phase7-4.css",
   "assets/phase8.css",
+  "assets/portal-hotfix.css",
   "assets/js/app.js",
   "assets/js/firebase.js",
   "assets/js/phase3.js",
   "assets/js/phase4.js",
   "assets/js/phase5.js",
-  "assets/js/phase6-loader.js",
+  "assets/js/phase6.js",
   "assets/js/phase7.js",
   "assets/js/phase8.js"
 ];
@@ -366,6 +367,12 @@ function updateConnectionBanner() {
   }
 }
 
+function hardReloadPortal() {
+  const url = new URL(location.href);
+  url.searchParams.set("portal_refresh", Date.now().toString());
+  location.replace(`${url.pathname}${url.search}${url.hash}`);
+}
+
 function captureError(error, source = "runtime") {
   const id = `P8-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
   const message = error?.message || String(error || "Unknown error");
@@ -377,9 +384,9 @@ function captureError(error, source = "runtime") {
   panel.id = "phase8-error-panel";
   panel.className = "p8-error-panel";
   panel.setAttribute("role", "alert");
-  panel.innerHTML = `<div><strong>Something did not load correctly.</strong><p>Reference ${escapeHTML(id)}. Refresh the page; if the issue continues, include this reference in a support request.</p></div><button type="button" data-p8-action="reload">Reload</button><button type="button" aria-label="Dismiss error" data-p8-action="dismiss-error">×</button>`;
+  panel.innerHTML = `<div><strong>Something did not load correctly.</strong><p>Reference ${escapeHTML(id)}. Refresh the portal files to clear an outdated browser copy.</p><span class="p8-error-detail">${escapeHTML(message.slice(0, 180))}</span></div><button type="button" data-p8-action="hard-reload">Refresh portal files</button><button type="button" aria-label="Dismiss error" data-p8-action="dismiss-error">×</button>`;
   document.body.append(panel);
-  panel.querySelector("[data-p8-action='reload']")?.addEventListener("click", () => location.reload());
+  panel.querySelector("[data-p8-action='hard-reload']")?.addEventListener("click", hardReloadPortal);
   panel.querySelector("[data-p8-action='dismiss-error']")?.addEventListener("click", () => panel.remove());
 }
 
