@@ -54,8 +54,8 @@ Confirm the Chapter Administrator can:
 
 Confirm the Compliance Administrator can:
 
-- Edit chapter records and registry records
-- View users and memberships
+- Edit private chapter records
+- View registry records, users, and memberships
 - View concern reports without saving a concern decision
 - Access submission review and chapter workspace setup
 
@@ -70,7 +70,7 @@ Confirm the Support Agent can:
 
 ## 4. Test chapter synchronization
 
-1. Open a private chapter record.
+1. Open a private chapter record as the Owner or Chapter Administrator.
 2. Change standing or renewal information with an administrative reason.
 3. Save the chapter.
 4. Synchronize the public registry.
