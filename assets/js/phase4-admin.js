@@ -17,6 +17,7 @@ import { auth, db, authPersistenceReady } from "./firebase.js";
 const app = document.querySelector("#app");
 const ROUTE = "/admin/chapter-workspaces";
 const ADMIN_ROLES = new Set(["owner", "chapterAdmin", "complianceAdmin"]);
+const CREATE_CHAPTER_ROLES = new Set(["owner", "chapterAdmin"]);
 const CHAPTER_ID_PATTERN = /^TPP-CH-[A-Z0-9]{1,32}$/;
 
 const state = {
@@ -89,6 +90,21 @@ function asDate(value) {
 
 function recordName(record) {
   return record?.officialName || record?.chapterName || record?.name || state.chapterId;
+}
+
+function canCreateChapter() {
+  return CREATE_CHAPTER_ROLES.has(state.profile?.systemRole);
+}
+
+function searchTokens(...values) {
+  const tokens = new Set();
+  values.forEach((value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (!normalized) return;
+    tokens.add(normalized);
+    normalized.split(/[^a-z0-9]+/).filter(Boolean).forEach((token) => tokens.add(token));
+  });
+  return Array.from(tokens).slice(0, 80);
 }
 
 function brand() {
@@ -173,7 +189,7 @@ async function loadWorkspace(chapterId, { rerender = true } = {}) {
 }
 
 function searchPanel() {
-  return `<section class="p4-admin-search"><div><p class="p4-kicker">Private portal setup</p><h1>Manage chapter workspaces.</h1><p>Initialize and maintain the private operational record used by Chapter Directors and Chapter Advisers.</p></div><form id="p4a-load-form"><label><span>Permanent Chapter ID</span><div><input name="chapterId" value="${escapeHTML(state.chapterId)}" placeholder="TPP-CH-A1B2C3" required><button class="btn btn-primary" type="submit">Load workspace</button></div></label></form></section>`;
+  return `<section class="p4-admin-search"><div><p class="p4-kicker">Private portal setup</p><h1>Manage chapter workspaces.</h1><p>Create, initialize, and maintain the official records used by Chapter Directors and Chapter Advisers.</p></div><form id="p4a-load-form"><label><span>Permanent Chapter ID</span><div><input name="chapterId" value="${escapeHTML(state.chapterId)}" placeholder="TPP-CH-A1B2C3" required><button class="btn btn-primary" type="submit">Load workspace</button></div></label></form></section>`;
 }
 
 function emptyState() {
@@ -181,7 +197,33 @@ function emptyState() {
 }
 
 function notPublishedState() {
-  return `<section class="p4-admin-empty"><div>${icons.alert}</div><h2>Chapter registry record not found.</h2><p>Create or import this Chapter ID in <code>publicChapterRegistry</code> before initializing its private workspace. The record does not need to be publicly published.</p></section>`;
+  if (!canCreateChapter()) {
+    return `<section class="p4-admin-empty"><div>${icons.alert}</div><h2>Chapter record not found.</h2><p>An Owner or Chapter Administrator must create ${escapeHTML(state.chapterId)} before its private workspace can be initialized.</p></section>`;
+  }
+  return `<section class="p4-admin-card p4-admin-create" id="p4a-create-chapter">
+    <div class="p4-admin-card-head"><div><p class="p4-kicker">New official chapter</p><h2>Create ${escapeHTML(state.chapterId)}</h2><p>This creates the registry record and initializes the private Director and Adviser workspace automatically.</p></div>${icons.plus}</div>
+    <div id="p4a-create-alert"></div>
+    <form class="p4-admin-form" id="p4a-create-chapter-form">
+      <div class="p4-admin-form-grid">
+        <label><span>Permanent Chapter ID</span><input name="chapterId" value="${escapeHTML(state.chapterId)}" readonly></label>
+        <label><span>Official chapter name</span><input name="officialName" maxlength="180" placeholder="The Prayer Project at Example School" required></label>
+        <label><span>Host institution</span><input name="hostInstitutionName" maxlength="180" placeholder="Example School" required></label>
+        <label><span>Institution type</span><select name="institutionType"><option value="school">School</option><option value="church">Church</option><option value="organization">Organization</option></select></label>
+        <label><span>City</span><input name="city" maxlength="100"></label>
+        <label><span>State</span><input name="state" maxlength="100"></label>
+        <label><span>Country</span><input name="country" maxlength="100" value="United States"></label>
+        <label><span>Service area</span><input name="serviceArea" maxlength="180" placeholder="School or community served"></label>
+        <label><span>Authorization status</span><select name="authorizationStatus"><option value="active">Active</option><option value="conditional">Conditional</option><option value="inactive">Temporarily inactive</option></select></label>
+        <label><span>Chapter standing</span><select name="standing"><option value="good_standing">Good standing</option><option value="action_required">Action required</option><option value="under_review">Under review</option><option value="probationary">Probationary standing</option></select></label>
+        <label><span>Approval date</span><input type="date" name="approvalDate"></label>
+        <label><span>Effective date</span><input type="date" name="effectiveDate"></label>
+        <label><span>Renewal date</span><input type="date" name="renewalDate"></label>
+      </div>
+      <label><span>Public summary</span><textarea name="summary" rows="3" maxlength="1000" placeholder="Short description shown on the public verification record."></textarea></label>
+      <label class="p4-admin-checkbox"><input type="checkbox" name="isPublished" checked><span>Publish this chapter in the public verification directory now</span></label>
+      <button class="btn btn-primary" id="p4a-create-chapter-submit" type="submit">${icons.plus} Create chapter and workspace</button>
+    </form>
+  </section>`;
 }
 
 function initializePanel() {
@@ -258,6 +300,83 @@ function toast(title, message) {
   item.innerHTML = `${icons.check}<div><strong>${escapeHTML(title)}</strong><p>${escapeHTML(message)}</p></div>`;
   region.append(item);
   setTimeout(() => item.remove(), 4200);
+}
+
+async function createChapterFromPortal(form) {
+  if (!canCreateChapter()) throw new Error("Only the Owner or a Chapter Administrator can create a chapter.");
+  const button = form.querySelector("#p4a-create-chapter-submit");
+  const values = Object.fromEntries(new FormData(form).entries());
+  const chapterId = String(values.chapterId || state.chapterId).trim().toUpperCase();
+  const officialName = String(values.officialName || "").trim();
+  const hostInstitutionName = String(values.hostInstitutionName || "").trim();
+  if (!CHAPTER_ID_PATTERN.test(chapterId)) throw new Error("The permanent Chapter ID is not valid.");
+  if (officialName.length < 2 || hostInstitutionName.length < 2) throw new Error("Enter the official chapter name and host institution.");
+
+  button.disabled = true;
+  button.textContent = "Creating chapter…";
+  try {
+    const registryRef = doc(db, "publicChapterRegistry", chapterId);
+    const chapterRef = doc(db, "chapters", chapterId);
+    const [registrySnapshot, chapterSnapshot] = await Promise.all([getDoc(registryRef), getDoc(chapterRef)]);
+    if (registrySnapshot.exists() || chapterSnapshot.exists()) {
+      throw new Error("A chapter record already exists for this permanent Chapter ID. Reload the workspace instead of creating another record.");
+    }
+
+    const nowDate = new Date();
+    const registryRecord = {
+      chapterId,
+      officialName,
+      hostInstitutionName,
+      institutionType: values.institutionType || "organization",
+      city: String(values.city || "").trim(),
+      state: String(values.state || "").trim(),
+      country: String(values.country || "United States").trim() || "United States",
+      serviceArea: String(values.serviceArea || "").trim(),
+      authorizationStatus: values.authorizationStatus || "active",
+      standing: values.standing || "good_standing",
+      approvalDate: asDate(values.approvalDate),
+      effectiveDate: asDate(values.effectiveDate),
+      renewalDate: asDate(values.renewalDate),
+      lastVerifiedAt: serverTimestamp(),
+      summary: String(values.summary || "").trim(),
+      publicMessage: "This chapter is recognized by The Prayer Project.",
+      publicNotice: "",
+      isPublished: form.isPublished.checked,
+      searchTokens: searchTokens(chapterId, officialName, hostInstitutionName, values.city, values.state, values.country, values.serviceArea),
+      createdAt: serverTimestamp(),
+      createdByUid: state.user.uid,
+      updatedAt: serverTimestamp(),
+      updatedByUid: state.user.uid
+    };
+
+    const batch = writeBatch(db);
+    batch.set(registryRef, registryRecord);
+    batch.set(doc(collection(db, "auditLogs")), {
+      actorUid: state.user.uid,
+      action: "chapter_created",
+      targetType: "chapter",
+      targetId: chapterId,
+      summary: `Created ${officialName} (${chapterId}) from the administration portal`,
+      createdAt: serverTimestamp()
+    });
+    await batch.commit();
+
+    state.chapterId = chapterId;
+    state.publicChapter = {
+      id: chapterId,
+      ...registryRecord,
+      lastVerifiedAt: nowDate,
+      createdAt: nowDate,
+      updatedAt: nowDate
+    };
+    toast("Chapter record created", `${chapterId} was created. Initializing its private workspace now.`);
+    await initializeWorkspace(button);
+  } catch (error) {
+    console.error(error);
+    toast("Chapter creation failed", error?.code === "permission-denied" ? "Your account cannot create registry records. Sign in as the Owner or a Chapter Administrator." : error.message || "Firestore rejected the chapter record.");
+    button.disabled = false;
+    button.innerHTML = `${icons.plus} Create chapter and workspace`;
+  }
 }
 
 async function initializeWorkspace(button) {
@@ -508,6 +627,10 @@ function bindEvents() {
   document.querySelector("#p4a-load-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     loadWorkspace(event.currentTarget.chapterId.value);
+  });
+  document.querySelector("#p4a-create-chapter-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try { await createChapterFromPortal(event.currentTarget); } catch (error) { console.error(error); toast("Unable to create chapter", error.message); }
   });
   document.querySelectorAll('[data-p4a-action="sign-out"]').forEach((button) => button.addEventListener("click", async () => {
     await signOut(auth);
