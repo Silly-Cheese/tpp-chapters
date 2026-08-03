@@ -474,7 +474,7 @@ observer.observe(app, { childList: true, subtree: true });
 await authPersistenceReady;
 onAuthStateChanged(auth, async (user) => {
   memberState.user = user;
-  memberState.ready = Boolean(user);
+  memberState.ready = true;
   memberState.error = null;
   memberState.membership = null;
   memberState.members = [];
