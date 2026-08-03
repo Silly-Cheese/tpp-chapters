@@ -37,6 +37,18 @@ jobs:
           path.write_text(text.replace('20260803.6', '20260803.7'))
           PY
 
+      - name: Remove every remaining verification predicate
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          for name in ('firestore.rules', 'storage.rules'):
+              path = Path(name)
+              text = path.read_text()
+              text = re.sub(r'^\s*&&\s*request\.auth\.token\.email_verified\s*==\s*true\s*\n', '', text, flags=re.M)
+              path.write_text(text)
+          PY
+
       - name: Validate implementation
         shell: bash
         run: |
