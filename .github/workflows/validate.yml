@@ -48,3 +48,6 @@ jobs:
 
       - name: Validate invitation-code activation
         run: python3 scripts/validate_no_email_verification.py
+
+      - name: Validate unified chapter portal
+        run: python3 scripts/validate_chapter_portal_v2.py
