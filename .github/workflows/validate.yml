@@ -51,3 +51,6 @@ jobs:
 
       - name: Validate unified chapter portal
         run: python3 scripts/validate_chapter_portal_v2.py
+
+      - name: Validate mobile drawer and member roster
+        run: python3 scripts/validate_mobile_members_roster.py
