@@ -2,8 +2,68 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Phase 1 reserves Cloud Storage but does not expose uploads yet.
-    // Later phases will add role-aware paths for chapter documents and support attachments.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userRecord() {
+      return firestore.get(/databases/(default)/documents/systemUsers/$(request.auth.uid)).data;
+    }
+
+    function isAdministrativeReviewer() {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/systemUsers/$(request.auth.uid))
+        && userRecord().accountStatus == 'active'
+        && userRecord().systemRole in ['owner', 'chapterAdmin', 'complianceAdmin'];
+    }
+
+    function membershipKey(chapterId) {
+      return chapterId + '__' + request.auth.uid;
+    }
+
+    function hasChapterMembership(chapterId) {
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && firestore.exists(/databases/(default)/documents/chapterMemberships/$(membershipKey(chapterId)))
+        && firestore.get(/databases/(default)/documents/chapterMemberships/$(membershipKey(chapterId))).data.status == 'active';
+    }
+
+    function submission(submissionId) {
+      return firestore.get(/databases/(default)/documents/chapterSubmissions/$(submissionId)).data;
+    }
+
+    function allowedContentType() {
+      return request.resource.contentType in [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/png',
+        'image/jpeg'
+      ];
+    }
+
+    match /chapter-submissions/{chapterId}/{submissionId}/{uid}/{fileName} {
+      allow read: if isAdministrativeReviewer() || hasChapterMembership(chapterId);
+
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && hasChapterMembership(chapterId)
+        && submission(submissionId).chapterId == chapterId
+        && submission(submissionId).submittedByUid == request.auth.uid
+        && submission(submissionId).status in ['draft', 'changes_requested']
+        && request.resource.size > 0
+        && request.resource.size <= 10 * 1024 * 1024
+        && allowedContentType();
+
+      allow delete: if isAdministrativeReviewer()
+        || (signedIn()
+          && request.auth.uid == uid
+          && hasChapterMembership(chapterId)
+          && submission(submissionId).chapterId == chapterId
+          && submission(submissionId).submittedByUid == request.auth.uid
+          && submission(submissionId).status in ['draft', 'changes_requested']);
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }
