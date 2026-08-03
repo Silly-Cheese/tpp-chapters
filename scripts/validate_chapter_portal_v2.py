@@ -22,7 +22,13 @@ for marker in required_portal:
     if marker not in portal:
         errors.append(f"Unified chapter portal is missing: {marker}")
 
-for marker in ("unhandledrejection", "stopImmediatePropagation", "tpp:background-permission-error"):
+for marker in (
+    "unhandledrejection",
+    "stopImmediatePropagation",
+    "tpp:background-permission-error",
+    "bridgePortalRoot",
+    "data-phase4-root",
+):
     if marker not in guard:
         errors.append(f"Permission guard is missing: {marker}")
 
