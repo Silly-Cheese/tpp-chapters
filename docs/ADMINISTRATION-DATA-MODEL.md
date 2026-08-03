@@ -148,8 +148,7 @@ createdAt
 ### Compliance Administrator
 
 - Chapter operational management
-- Registry synchronization
-- Read-only user and membership directories
+- Read-only registry, user, and membership directories
 - Read-only public concern reports under the current rules
 
 ### Support Agent
