@@ -7,7 +7,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -16,31 +16,11 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-
-      - name: Prepare member roster migration
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/mobile-members-roster'
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/apply_member_roster_rules.py')
-          text = path.read_text()
-          marker = '\nworkflow_path = Path(".github/workflows/validate.yml")'
-          if marker in text:
-              text = text.split(marker, 1)[0] + '\nprint("Chapter member roster rules and portal fixes applied.")\n'
-          path.write_text(text)
-          PY
-
-      - name: Apply member roster rules
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/mobile-members-roster'
-        run: python3 scripts/apply_member_roster_rules.py
 
       - name: Validate JavaScript syntax
         shell: bash
@@ -74,16 +54,3 @@ jobs:
 
       - name: Validate mobile drawer and member roster
         run: python3 scripts/validate_mobile_members_roster.py
-
-      - name: Commit generated rules and portal correction
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/mobile-members-roster'
-        run: |
-          if git diff --quiet -- firestore.rules assets/js/chapter-portal-mobile-members.js; then
-            echo "Generated member roster files are already current."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add firestore.rules assets/js/chapter-portal-mobile-members.js
-          git commit -m "Apply chapter member roster permissions"
-          git push origin HEAD:fix/mobile-members-roster
