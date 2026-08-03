@@ -717,7 +717,8 @@ service cloud.firestore {
     }
 
     match /systemSettings/{documentId} {
-      allow read: if isActive();
+      allow get: if documentId == 'portal' || isActive();
+      allow list: if isActive();
       allow create, update, delete: if isOwner();
     }
 

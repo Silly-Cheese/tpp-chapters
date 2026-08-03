@@ -1,37 +1,40 @@
 # The Prayer Project — Chapter Registry & Operations Portal
 
-The official public registry and private operations platform for Prayer Project chapters.
+The official public registry and private chapter-operations platform for The Prayer Project.
 
 ## Production deployment
 
 - Production address: `https://chapter.ask4prayers.com`
 - Firebase project: `tpp-chapters`
 - GitHub Pages source: `main` and `/ (root)`
+- Supported release: current `main`
 
-Completed phase branches are reviewed through pull requests and merged into `main`. GitHub Pages serves the files from `main`; Firebase Security Rules, indexes, and Storage Rules must still be deployed separately with the Firebase CLI.
+Completed phase branches are reviewed through pull requests and merged into `main`. GitHub Pages serves the website files from `main`. Firebase Security Rules, indexes, and Storage Rules are deployed separately with the Firebase CLI.
 
-The Firebase web configuration is public client configuration by design. Never commit service-account keys, Admin SDK credentials, or server secrets.
+The Firebase web configuration is public client configuration by design. Never commit service-account keys, Admin SDK credentials, passwords, activation codes, or server secrets.
 
-## Current release
+## Complete eight-phase release
 
 ### Phase 1 — Foundation and design system
 
 - Responsive black, cream, white, and gold interface
 - Firebase Email/Password authentication
-- Persistent sessions, password reset, profiles, roles, protected routing, and light/dark themes
+- Persistent sessions, password reset, profiles, role routing, protected pages, and light/dark appearance
 
 ### Phase 2 — Public chapter registry
 
 - Permanent Chapter ID verification
 - Public chapter search and directory
-- Authorization, standing, stable verification links, QR codes, and unauthorized-chapter reports
+- Authorization and standing results
+- Stable verification links and QR codes
+- Unauthorized-chapter concern reports
 
 ### Phase 3 — Account invitations and activation
 
 - Secure Director and Adviser invitations
 - Single-use activation codes stored as SHA-256 hashes
 - New-account and existing-account activation
-- Assigned chapter, role, email, and Firebase verification enforcement
+- Assigned chapter, role, email, and Firebase email-verification enforcement
 
 ### Phase 4 — Director and Adviser portals
 
@@ -53,25 +56,33 @@ The Firebase web configuration is public client configuration by design. Never c
 
 ### Phase 7 — Full administrative management
 
-- Unified administrative dashboard with live operational metrics
-- Private chapter directory and chapter-record management
-- Authorization, standing, institution, and renewal controls
-- Public-registry publishing, synchronization, and unpublishing
-- Portal-user directory with Owner-only role and account-status controls
-- Chapter-membership assignment, role changes, suspension, and revocation
-- Unauthorized-chapter concern review
-- Append-only audit-history search
-- CSV exports for operational records
-- Owner-controlled system settings
-- Unified navigation to invitation, workspace, submission, support, and notice workspaces
+- Unified administrative dashboard and operational metrics
+- Private chapter records and public-registry synchronization
+- Portal-user and chapter-membership management
+- Concern review, audit history, CSV exports, and system settings
+- Unified navigation to specialist administration areas
+
+### Phase 8 — Production finalization
+
+- Public maintenance mode and feature availability gates
+- Public announcement banner
+- Administrator recovery access during maintenance
+- Global JavaScript error recovery and support references
+- Online/offline connection notices
+- Accessible route focus and reduced-motion support
+- Administrative system-health console
+- GitHub Pages route recovery
+- Continuous GitHub Actions validation
+- Security policy, role matrix, and final production checklist
 
 ## Required Firebase setup
 
 ### Authentication
 
 1. Enable **Email/Password** under **Authentication → Sign-in method**.
-2. Add `chapter.ask4prayers.com` and `silly-cheese.github.io` to authorized domains when necessary.
-3. Review the email-verification template.
+2. Add `chapter.ask4prayers.com` to authorized domains.
+3. Add `silly-cheese.github.io` when the GitHub Pages fallback address is used.
+4. Review the password-reset and email-verification templates.
 
 ### Deploy Rules and indexes
 
@@ -140,6 +151,7 @@ updatedAt: <timestamp>
 /#/admin/concerns
 /#/admin/audit
 /#/admin/settings
+/#/admin/system-health
 ```
 
 ### Specialist administration
@@ -183,24 +195,38 @@ chapterUser
 
 Director, Adviser, and chapter-user accounts require verified Firebase email before private chapter data is available.
 
-A Phase 7 `accountStatus` change controls Firestore portal access. Without a trusted Admin SDK backend, this static site cannot disable or delete the underlying Firebase Authentication account.
+Changing `accountStatus` controls protected Firestore portal access. Without a trusted Admin SDK backend, this static site cannot disable or delete the underlying Firebase Authentication account. That action must be completed manually in Firebase Console when necessary.
+
+## Validation
+
+Pull requests and pushes to `main` run `.github/workflows/validate.yml`.
+
+Local validation:
+
+```bash
+python3 scripts/validate_repository.py
+```
+
+JavaScript syntax validation:
+
+```bash
+find assets/js -type f -name '*.js' -print0 | while IFS= read -r -d '' file; do
+  node --input-type=module --check < "$file"
+done
+```
 
 ## Documentation
 
-- [`PHASE-1-NOTES.md`](PHASE-1-NOTES.md)
-- [`PHASE-2-NOTES.md`](PHASE-2-NOTES.md)
-- [`PHASE-3-NOTES.md`](PHASE-3-NOTES.md)
-- [`PHASE-4-NOTES.md`](PHASE-4-NOTES.md)
-- [`PHASE-5-NOTES.md`](PHASE-5-NOTES.md)
-- [`PHASE-6-NOTES.md`](PHASE-6-NOTES.md)
-- [`PHASE-7-NOTES.md`](PHASE-7-NOTES.md)
+- [`PHASE-8-NOTES.md`](PHASE-8-NOTES.md)
+- [`docs/PHASE-8-PRODUCTION-CHECKLIST.md`](docs/PHASE-8-PRODUCTION-CHECKLIST.md)
+- [`docs/ROLE-PERMISSION-MATRIX.md`](docs/ROLE-PERMISSION-MATRIX.md)
+- [`SECURITY.md`](SECURITY.md)
 - [`docs/REGISTRY-DATA-MODEL.md`](docs/REGISTRY-DATA-MODEL.md)
 - [`docs/ACCOUNT-ACTIVATION-DATA-MODEL.md`](docs/ACCOUNT-ACTIVATION-DATA-MODEL.md)
 - [`docs/CHAPTER-PORTAL-DATA-MODEL.md`](docs/CHAPTER-PORTAL-DATA-MODEL.md)
 - [`docs/SUBMISSION-WORKFLOW-DATA-MODEL.md`](docs/SUBMISSION-WORKFLOW-DATA-MODEL.md)
 - [`docs/SUPPORT-COMMUNICATIONS-DATA-MODEL.md`](docs/SUPPORT-COMMUNICATIONS-DATA-MODEL.md)
 - [`docs/ADMINISTRATION-DATA-MODEL.md`](docs/ADMINISTRATION-DATA-MODEL.md)
-- [`docs/PHASE-7-SETUP.md`](docs/PHASE-7-SETUP.md)
 
 ## Local testing
 
@@ -208,15 +234,14 @@ A Phase 7 `accountStatus` change controls Firestore portal access. Without a tru
 python -m http.server 8080
 ```
 
-Then open `http://localhost:8080` and add `localhost` to Firebase Authentication authorized domains if necessary.
+Then open `http://localhost:8080` and add `localhost` to Firebase Authentication authorized domains only when local testing requires it.
 
-## Phase roadmap
+## Launch standard
 
-1. Foundation and design system — complete
-2. Public chapter registry and verification — complete
-3. Account invitations and activation — complete
-4. Director and Adviser portals — complete
-5. Reports, renewals, and operational workflows — complete
-6. Real-time support and communications — complete
-7. Full administrative management — complete
-8. Security review, testing, documentation, and production finalization
+The platform is ready for real chapter use only after:
+
+1. The latest `main` deployment is live on the custom domain.
+2. Firestore Rules, indexes, and Storage Rules are deployed.
+3. The full role matrix is tested with separate accounts.
+4. The Phase 8 production checklist is completed.
+5. The system-health console reports no unresolved critical failures.
