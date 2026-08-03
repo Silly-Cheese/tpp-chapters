@@ -36,3 +36,6 @@ jobs:
 
       - name: Validate chapter ID format
         run: python3 scripts/validate_chapter_id_format.py
+
+      - name: Validate portal routing and cache versioning
+        run: python3 scripts/validate_portal_routing.py
