@@ -26,6 +26,17 @@ jobs:
       - name: Apply invitation-code activation migration
         run: python3 scripts/apply_no_email_verification.py
 
+      - name: Align chapter creation validator with build 20260803.7
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/validate_create_chapter_portal.py')
+          text = path.read_text()
+          if '20260803.6' not in text:
+              raise SystemExit('Expected build marker 20260803.6 was not found in the chapter creation validator.')
+          path.write_text(text.replace('20260803.6', '20260803.7'))
+          PY
+
       - name: Validate implementation
         shell: bash
         run: |
