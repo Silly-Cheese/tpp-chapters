@@ -84,7 +84,7 @@ After merging Phase 8:
 ```bash
 firebase login
 firebase use tpp-chapters
-firebase deploy --only firestore:rules,firestore:indexes,storage
+firebase deploy --only firestore:rules,storage
 ```
 
 Then complete `docs/PHASE-8-PRODUCTION-CHECKLIST.md`.

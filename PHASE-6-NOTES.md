@@ -49,7 +49,7 @@ support-attachments/{chapterId}/{ticketId}/{messageId}/{uid}/{fileName}
 ## Deployment requirements
 
 ```bash
-firebase deploy --only firestore:rules,firestore:indexes,storage
+firebase deploy --only firestore:rules,storage
 ```
 
 The support indexes can take several minutes to build after deployment.

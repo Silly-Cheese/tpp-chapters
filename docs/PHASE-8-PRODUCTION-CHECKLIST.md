@@ -31,7 +31,7 @@ Run:
 ```bash
 firebase login
 firebase use tpp-chapters
-firebase deploy --only firestore:rules,firestore:indexes,storage
+firebase deploy --only firestore:rules,storage
 ```
 
 Then confirm:

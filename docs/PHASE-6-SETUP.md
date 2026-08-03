@@ -7,7 +7,7 @@ Phase 6 changes Firestore Rules, Firestore indexes, and Storage Rules.
 ```bash
 firebase login
 firebase use tpp-chapters
-firebase deploy --only firestore:rules,firestore:indexes,storage
+firebase deploy --only firestore:rules,storage
 ```
 
 Wait until the two new `supportTickets` indexes show **Enabled** in Firebase Console.

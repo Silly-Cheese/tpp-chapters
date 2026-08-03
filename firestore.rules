@@ -844,6 +844,7 @@ service cloud.firestore {
     }
 
     match /supportTickets/{ticketId} {
+      allow read: if canManageSupport();
       allow read: if canAccessSupportTicketData(resource.data);
       allow create: if validNewSupportTicket(ticketId);
       allow update: if canManageSupport() || validChapterSupportUpdate();

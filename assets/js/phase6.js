@@ -323,8 +323,17 @@ function subscribeChapterTickets() {
     if (PHASE6_ROUTES.has(routeFromHash()) && !state.rendering) renderPhase6({ prepare: false });
     else augmentExistingNavigation();
   };
-  const shared = query(collection(db, "supportTickets"), where("accessKeys", "array-contains", `chapter:${state.selectedChapterId}`));
-  const personal = query(collection(db, "supportTickets"), where("accessKeys", "array-contains", `user:${state.user.uid}`));
+  const shared = query(
+    collection(db, "supportTickets"),
+    where("chapterId", "==", state.selectedChapterId),
+    where("visibility", "==", "chapter")
+  );
+  const personal = query(
+    collection(db, "supportTickets"),
+    where("chapterId", "==", state.selectedChapterId),
+    where("visibility", "==", "adviser_private"),
+    where("createdByUid", "==", state.user.uid)
+  );
   state.listeners.push(onSnapshot(shared, (snapshot) => {
     snapshot.docChanges().forEach((change) => change.type === "removed" ? records.delete(change.doc.id) : records.set(change.doc.id, { id: change.doc.id, ...change.doc.data() }));
     publish();
@@ -603,7 +612,8 @@ async function uploadMessageAttachments(ticket, messageId, files) {
   const uploaded = [];
   for (const file of files) {
     const fileName = `${crypto.randomUUID()}-${safeFileName(file.name)}`;
-    const path = `support-attachments/${ticket.chapterId}/${ticket.id}/${messageId}/${state.user.uid}/${fileName}`;
+    const uploaderType = SUPPORT_STAFF_ROLES.has(state.profile?.systemRole) ? "staff" : "chapter";
+    const path = `support-attachments/${uploaderType}/${ticket.chapterId}/${ticket.id}/${messageId}/${state.user.uid}/${fileName}`;
     const storageRef = ref(storage, path);
     await uploadBytes(storageRef, file, { contentType: file.type, customMetadata: { ticketId: ticket.id, chapterId: ticket.chapterId, messageId, uploadedByUid: state.user.uid } });
     const downloadUrl = await getDownloadURL(storageRef);
