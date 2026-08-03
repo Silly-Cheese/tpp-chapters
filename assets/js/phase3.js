@@ -43,6 +43,7 @@ const phase3State = {
   profile: null,
   invitations: [],
   invitationLoading: false,
+  invitationsLoaded: false,
   invitationError: null,
   selectedInvite: null,
   activationMode: "create",
@@ -217,7 +218,7 @@ function phase3AdminLayout(content, active = "invitations") {
       </aside>
       <div class="phase3-admin-main">
         <header class="phase3-admin-topbar">
-          <div><span class="phase3-kicker">Phase 3</span><strong>Account Access</strong></div>
+          <div><span class="phase3-kicker">Administration</span><strong>Account Access</strong></div>
           <button class="btn btn-secondary" type="button" data-phase3-action="sign-out">${icons.logout} Sign out</button>
         </header>
         <main class="phase3-admin-content" id="main-content">${content}</main>
@@ -431,7 +432,7 @@ function activationCompletePage() {
       <p>Your account is connected to its approved chapter assignment. Sign in with this same email and password on any supported device.</p>
       <div id="activation-membership-summary" class="phase3-membership-summary"><div class="spinner"></div><span>Loading chapter assignment…</span></div>
       <div class="phase3-button-stack">
-        <a class="btn btn-primary" href="#/dashboard">Open my dashboard ${icons.arrow}</a>
+        <a class="btn btn-primary" href="#/portal">Open my portal ${icons.arrow}</a>
         <a class="btn btn-secondary" href="#/verify">Open public registry</a>
       </div>
     </section>`, { compact: true });
@@ -517,7 +518,7 @@ function adminInvitationsPage() {
         <div class="phase3-card-heading">
           <span class="phase3-step">New invitation</span>
           <h2>Assign chapter access</h2>
-          <p>The chapter must already have a published record in the public registry.</p>
+          <p>The chapter must already have an initialized private workspace.</p>
         </div>
         <div id="invitation-alert"></div>
         <form class="form" id="invitation-create-form" novalidate>
@@ -605,9 +606,10 @@ async function loadInvitations({ rerender = true } = {}) {
     phase3State.invitations = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
   } catch (error) {
     console.error(error);
-    phase3State.invitationError = "Firestore could not return the invitation list. Confirm that the Phase 3 rules are deployed.";
+    phase3State.invitationError = error?.code === "permission-denied" ? "The updated invitation rules have not been deployed. Deploy Firestore rules and refresh." : "Firestore could not return the invitation list.";
   } finally {
     phase3State.invitationLoading = false;
+    phase3State.invitationsLoaded = true;
     if (rerender) renderPhase3();
   }
 }
@@ -650,8 +652,6 @@ async function claimInvitation({ user, displayName }) {
   const memberRef = doc(db, "chapterMemberships", membershipId);
   const inviteRef = doc(db, "chapterInvitations", invite.id);
   const existingProfile = await getDoc(userRef);
-  const existingMembership = await getDoc(memberRef);
-  if (existingMembership.exists()) throw new Error("This account already has access to the assigned chapter.");
 
   const batch = writeBatch(db);
   batch.update(inviteRef, {
@@ -744,7 +744,9 @@ async function handleCreateActivation(form) {
       ? "An account already exists for this email. Choose “Use an existing account” instead."
       : error?.code === "auth/weak-password"
         ? "Firebase rejected the password. Use a stronger password with at least 10 characters."
-        : error?.message || "The account could not be activated.";
+        : error?.code === "permission-denied"
+          ? "The Firebase account was created, but chapter access could not be assigned because the updated Firestore rules are not deployed. Deploy the rules, then choose “Use an existing account” with the same email and password."
+          : error?.message || "The account could not be activated.";
     setAlert("activation-alert", "danger", "Activation failed", message);
     if (createdUser && !phase3State.profile) {
       phase3State.activationMode = "existing";
@@ -804,9 +806,16 @@ async function handleCreateInvitation(form) {
   submit.disabled = true;
   submit.textContent = "Creating invitation…";
   try {
-    const chapterSnapshot = await getDoc(doc(db, "publicChapterRegistry", chapterId));
-    if (!chapterSnapshot.exists() || chapterSnapshot.data().isPublished !== true) throw new Error("No published registry record was found for this Chapter ID.");
-    const chapter = chapterSnapshot.data();
+    const [workspaceSnapshot, registrySnapshot] = await Promise.all([
+      getDoc(doc(db, "chapters", chapterId)),
+      getDoc(doc(db, "publicChapterRegistry", chapterId))
+    ]);
+    if (!workspaceSnapshot.exists()) {
+      throw new Error("Initialize this chapter's private workspace before issuing an account invitation.");
+    }
+    const workspace = workspaceSnapshot.data();
+    const registry = registrySnapshot.exists() ? registrySnapshot.data() : {};
+    const chapterName = workspace.officialName || registry.officialName || registry.chapterName || chapterId;
     const code = createInviteCode();
     const normalizedCode = normalizeInviteCode(code);
     const inviteId = await sha256Hex(normalizedCode);
@@ -820,7 +829,7 @@ async function handleCreateInvitation(form) {
       email,
       displayName,
       chapterId,
-      chapterName: chapter.officialName,
+      chapterName,
       role,
       status: "pending",
       expiresAt,
@@ -1059,7 +1068,7 @@ async function renderPhase3() {
         : route === "/activation-complete"
           ? "Account Activated | The Prayer Project"
           : "Activate Account | The Prayer Project";
-    if (route === "/admin/invitations" && !phase3State.invitationLoading && !phase3State.invitations.length && !phase3State.invitationError) {
+    if (route === "/admin/invitations" && !phase3State.invitationLoading && !phase3State.invitationsLoaded) {
       queueMicrotask(() => loadInvitations());
     }
     if (route === "/activation-complete") queueMicrotask(loadMembershipSummary);
@@ -1078,6 +1087,13 @@ observer.observe(app, { childList: true });
 
 await authPersistenceReady;
 onAuthStateChanged(auth, async (user) => {
+  const previousUid = phase3State.user?.uid || null;
+  const nextUid = user?.uid || null;
+  if (previousUid !== nextUid) {
+    phase3State.invitations = [];
+    phase3State.invitationsLoaded = false;
+    phase3State.invitationError = null;
+  }
   phase3State.user = user;
   await loadProfile(user);
   phase3State.authReady = true;
