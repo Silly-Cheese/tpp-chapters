@@ -36,12 +36,12 @@ for marker in (".cp2-shell", ".cp2-actions", ".cp2-gate", "[data-theme=\"dark\"]
     if marker not in css:
         errors.append(f"Unified chapter portal stylesheet is missing: {marker}")
 
-if 'content="20260803.8"' not in index:
-    errors.append("Production build is not 20260803.8")
+if 'content="20260803.9"' not in index:
+    errors.append("Production build is not 20260803.9")
 for asset in (
-    "assets/chapter-portal-v2.css?v=20260803.8",
-    "assets/js/portal-permission-guard.js?v=20260803.8",
-    "assets/js/chapter-portal-v2.js?v=20260803.8",
+    "assets/chapter-portal-v2.css?v=20260803.9",
+    "assets/js/portal-permission-guard.js?v=20260803.9",
+    "assets/js/chapter-portal-v2.js?v=20260803.9",
 ):
     if asset not in index:
         errors.append(f"Production entry point is missing: {asset}")
