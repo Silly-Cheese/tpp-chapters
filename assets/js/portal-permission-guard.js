@@ -16,3 +16,17 @@ window.addEventListener("unhandledrejection", (event) => {
 window.addEventListener("error", (event) => {
   stopBackgroundPermissionError(event, event.error?.message || event.message);
 }, true);
+
+const appRoot = document.querySelector("#app");
+
+if (appRoot) {
+  const bridgePortalRoot = () => {
+    const portal = appRoot.querySelector("[data-chapter-portal-v2]");
+    if (portal && !portal.hasAttribute("data-phase4-root")) {
+      portal.setAttribute("data-phase4-root", "");
+    }
+  };
+
+  new MutationObserver(bridgePortalRoot).observe(appRoot, { childList: true, subtree: true });
+  bridgePortalRoot();
+}
