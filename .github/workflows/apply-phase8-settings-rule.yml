@@ -1,0 +1,60 @@
+name: Apply Phase 8 settings rule
+
+on:
+  push:
+    branches:
+      - phase-8-production-finalization
+
+permissions:
+  contents: write
+
+jobs:
+  patch-rule:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out Phase 8 branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase-8-production-finalization
+          fetch-depth: 0
+
+      - name: Permit public reads of safe portal settings
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("firestore.rules")
+          text = path.read_text(encoding="utf-8")
+          old = """    match /systemSettings/{documentId} {
+              allow read: if isActive();
+              allow create, update, delete: if isOwner();
+            }"""
+          new = """    match /systemSettings/{documentId} {
+              allow get: if documentId == 'portal' || isActive();
+              allow list: if isActive();
+              allow create, update, delete: if isOwner();
+            }"""
+          if new in text:
+              print("Phase 8 system settings rule is already present.")
+          elif old in text:
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          else:
+              raise SystemExit("Expected systemSettings rule block was not found.")
+          PY
+
+      - name: Validate repository
+        run: python3 scripts/validate_repository.py
+
+      - name: Commit rule and remove temporary workflow
+        run: |
+          rm .github/workflows/apply-phase8-settings-rule.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firestore.rules .github/workflows/apply-phase8-settings-rule.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Phase 8: expose safe portal settings for public feature gates"
+          git push origin HEAD:phase-8-production-finalization
