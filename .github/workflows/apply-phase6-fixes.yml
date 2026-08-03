@@ -1,0 +1,66 @@
+name: Apply Phase 6 client fixes
+
+on:
+  push:
+    branches:
+      - phase-6-support-communications
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-6-support-communications
+
+      - name: Patch Phase 6 queries and attachment paths
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('assets/js/phase6.js')
+          text = path.read_text()
+
+          old_queries = '''  const shared = query(collection(db, "supportTickets"), where("accessKeys", "array-contains", `chapter:${state.selectedChapterId}`));
+          const personal = query(collection(db, "supportTickets"), where("accessKeys", "array-contains", `user:${state.user.uid}`));'''
+          new_queries = '''  const shared = query(
+            collection(db, "supportTickets"),
+            where("chapterId", "==", state.selectedChapterId),
+            where("visibility", "==", "chapter"),
+            where("accessKeys", "array-contains", `chapter:${state.selectedChapterId}`)
+          );
+          const personal = query(
+            collection(db, "supportTickets"),
+            where("chapterId", "==", state.selectedChapterId),
+            where("visibility", "==", "adviser_private"),
+            where("createdByUid", "==", state.user.uid),
+            where("accessKeys", "array-contains", `user:${state.user.uid}`)
+          );'''
+          if old_queries not in text:
+              raise SystemExit('Expected support query block was not found.')
+          text = text.replace(old_queries, new_queries)
+
+          old_path = '''    const path = `support-attachments/${ticket.chapterId}/${ticket.id}/${messageId}/${state.user.uid}/${fileName}`;'''
+          new_path = '''    const uploaderType = SUPPORT_STAFF_ROLES.has(state.profile?.systemRole) ? "staff" : "chapter";
+            const path = `support-attachments/${uploaderType}/${ticket.chapterId}/${ticket.id}/${messageId}/${state.user.uid}/${fileName}`;'''
+          if old_path not in text:
+              raise SystemExit('Expected support attachment path was not found.')
+          text = text.replace(old_path, new_path)
+
+          path.write_text(text)
+          PY
+
+      - name: Validate JavaScript
+        run: node --check assets/js/phase6.js
+
+      - name: Remove temporary workflow and commit fixes
+        run: |
+          rm .github/workflows/apply-phase6-fixes.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/js/phase6.js .github/workflows/apply-phase6-fixes.yml
+          git commit -m "Phase 6: align ticket queries and attachment paths"
+          git push origin HEAD:phase-6-support-communications
