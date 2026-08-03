@@ -265,7 +265,6 @@ async function loadProfile(user) {
 
 async function loadMemberships() {
   state.memberships = [];
-  if (!state.user?.emailVerified) return;
   const snapshot = await getDocs(query(collection(db, "chapterMemberships"), where("uid", "==", state.user.uid)));
   state.memberships = snapshot.docs
     .map((item) => ({ id: item.id, ...item.data() }))
@@ -953,8 +952,8 @@ async function renderPhase6({ prepare = true } = {}) {
     }
     if (prepare) await prepareRoute(route);
     if (CHAPTER_ROUTES.has(route)) {
-      if (!state.profile || !CHAPTER_ROLES.has(state.profile.systemRole) || !state.user.emailVerified) {
-        app.innerHTML = gatePage("A verified Chapter Director or Adviser account is required.");
+      if (!state.profile || !CHAPTER_ROLES.has(state.profile.systemRole)) {
+        app.innerHTML = gatePage("An active Chapter Director or Adviser account is required.");
       } else if (!state.memberships.length) {
         app.innerHTML = gatePage("No active chapter membership was found for this account.");
       } else {
@@ -999,6 +998,6 @@ onAuthStateChanged(auth, async (user) => {
   state.user = user;
   await loadProfile(user);
   state.authReady = true;
-  if (user?.emailVerified && CHAPTER_ROLES.has(state.profile?.systemRole)) await loadMemberships();
+  if (user && CHAPTER_ROLES.has(state.profile?.systemRole)) await loadMemberships();
   await renderPhase6({ prepare: true });
 });

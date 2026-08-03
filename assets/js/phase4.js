@@ -190,7 +190,6 @@ async function loadProfile(user) {
 
 async function loadMemberships() {
   state.memberships = [];
-  if (!state.user?.emailVerified) return;
   const snapshot = await getDocs(query(collection(db, "chapterMemberships"), where("uid", "==", state.user.uid)));
   state.memberships = snapshot.docs
     .map((item) => ({ id: item.id, ...item.data() }))
@@ -572,10 +571,6 @@ function renderPhase4() {
       location.hash = "/login";
       return;
     }
-    if (!state.user.emailVerified && CHAPTER_PROFILE_ROLES.has(state.profile?.systemRole)) {
-      location.hash = "/verify-email";
-      return;
-    }
     if (!state.profile || state.profile.accountStatus !== "active") {
       app.innerHTML = noAccessPage("Your portal account is not currently active.");
     } else if (!state.memberships.length) {
@@ -727,7 +722,7 @@ onAuthStateChanged(auth, async (user) => {
   state.error = null;
   try {
     await loadProfile(user);
-    if (user?.emailVerified) {
+    if (user && CHAPTER_PROFILE_ROLES.has(state.profile?.systemRole)) {
       await loadMemberships();
       if (state.selectedChapterId) await loadChapterWorkspace(state.selectedChapterId, { rerender: false });
     } else {

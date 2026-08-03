@@ -27,7 +27,6 @@ service firebase.storage {
     function hasChapterMembership(chapterId) {
       let membership = firestore.get(/databases/(default)/documents/chapterMemberships/$(membershipKey(chapterId))).data;
       return signedIn()
-        && request.auth.token.email_verified == true
         && membership.status == 'active';
     }
 
@@ -35,7 +34,6 @@ service firebase.storage {
       let membership = firestore.get(/databases/(default)/documents/chapterMemberships/$(membershipKey(chapterId))).data;
       let ticket = firestore.get(/databases/(default)/documents/supportTickets/$(ticketId)).data;
       return signedIn()
-        && request.auth.token.email_verified == true
         && membership.status == 'active'
         && ticket.chapterId == chapterId
         && ((ticket.visibility == 'chapter')

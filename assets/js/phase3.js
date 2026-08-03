@@ -1,9 +1,6 @@
 import {
   createUserWithEmailAndPassword,
-  getIdToken,
   onAuthStateChanged,
-  reload,
-  sendEmailVerification,
   signInWithEmailAndPassword,
   signOut,
   updateProfile
@@ -272,7 +269,7 @@ function activationIntro() {
         <div class="phase3-trust-list">
           <div>${icons.shield}<span><strong>Role protected</strong> Your access is assigned by the invitation, not by the browser.</span></div>
           <div>${icons.key}<span><strong>Single use</strong> A successful activation permanently closes the code.</span></div>
-          <div>${icons.mail}<span><strong>Email verified</strong> Chapter accounts must verify their assigned email address.</span></div>
+          <div>${icons.mail}<span><strong>Assigned email</strong> The invitation fixes the login email and chapter role before account creation.</span></div>
         </div>
       </div>
       <div class="phase3-card phase3-activation-card">
@@ -381,28 +378,8 @@ function activationPage() {
 }
 
 function verifyEmailPage() {
-  if (!phase3State.user) {
-    queueMicrotask(() => navigate("/login"));
-    return phase3PublicLayout(`<section class="phase3-card phase3-message-card"><div class="spinner"></div><h1>Opening sign in…</h1></section>`, { compact: true });
-  }
-  if (phase3State.user.emailVerified) {
-    queueMicrotask(() => navigate("/activation-complete"));
-    return phase3PublicLayout(`<section class="phase3-card phase3-message-card"><div class="spinner"></div><h1>Verification confirmed…</h1></section>`, { compact: true });
-  }
-  return phase3PublicLayout(`
-    <section class="phase3-card phase3-message-card">
-      <div class="phase3-message-icon">${icons.mail}</div>
-      <p class="phase3-kicker">Step 3 of 3</p>
-      <h1>Verify your email address.</h1>
-      <p>A verification email was sent to <strong>${escapeHTML(phase3State.user.email || "your assigned address")}</strong>. Open that message, select the verification link, and then return here.</p>
-      <div id="verification-alert"></div>
-      <div class="phase3-button-stack">
-        <button class="btn btn-primary" id="check-verification" type="button" data-phase3-action="check-verification">${icons.refresh} I verified my email</button>
-        <button class="btn btn-secondary" id="resend-verification" type="button" data-phase3-action="resend-verification">${icons.mail} Resend verification email</button>
-        <button class="btn btn-secondary" type="button" data-phase3-action="sign-out">${icons.logout} Sign out</button>
-      </div>
-      <p class="phase3-form-note">The portal will not open chapter records until Firebase confirms that this email is verified.</p>
-    </section>`, { compact: true });
+  queueMicrotask(() => navigate("/activation-complete"));
+  return phase3PublicLayout(`<section class="phase3-card phase3-message-card"><div class="spinner"></div><h1>Opening your activated account…</h1><p>Email verification is not required for invitation-based chapter access.</p></section>`, { compact: true });
 }
 
 async function getOwnMemberships() {
@@ -419,10 +396,6 @@ function activationCompletePage() {
   if (!phase3State.user) {
     queueMicrotask(() => navigate("/login"));
     return phase3PublicLayout(`<section class="phase3-card phase3-message-card"><div class="spinner"></div><h1>Opening sign in…</h1></section>`, { compact: true });
-  }
-  if (CHAPTER_ROLES.has(phase3State.profile?.systemRole) && !phase3State.user.emailVerified) {
-    queueMicrotask(() => navigate("/verify-email"));
-    return phase3PublicLayout(`<section class="phase3-card phase3-message-card"><div class="spinner"></div><h1>Checking verification…</h1></section>`, { compact: true });
   }
   return phase3PublicLayout(`
     <section class="phase3-card phase3-message-card phase3-success-card">
@@ -732,12 +705,7 @@ async function handleCreateActivation(form) {
     createdUser = credential.user;
     await updateProfile(createdUser, { displayName });
     await claimInvitation({ user: createdUser, displayName });
-    try {
-      await sendEmailVerification(createdUser, { url: `${location.origin}/#/verify-email` });
-    } catch (verificationError) {
-      console.warn("Account activated, but the first verification email could not be sent.", verificationError);
-    }
-    navigate("/verify-email");
+    navigate("/activation-complete");
   } catch (error) {
     console.error(error);
     const message = error?.code === "auth/email-already-in-use"
@@ -768,16 +736,7 @@ async function handleExistingActivation(form) {
     const credential = await signInWithEmailAndPassword(auth, normalizeEmail(invite.email), form.password.value);
     const displayName = credential.user.displayName || invite.displayName || invite.email.split("@")[0];
     await claimInvitation({ user: credential.user, displayName });
-    if (!credential.user.emailVerified) {
-      try {
-        await sendEmailVerification(credential.user, { url: `${location.origin}/#/verify-email` });
-      } catch (verificationError) {
-        console.warn("Invitation claimed, but the verification email could not be sent.", verificationError);
-      }
-      navigate("/verify-email");
-    } else {
-      navigate("/activation-complete");
-    }
+    navigate("/activation-complete");
   } catch (error) {
     console.error(error);
     const message = error?.code === "auth/invalid-credential"
@@ -887,47 +846,10 @@ async function revokeInvitation(inviteId, button) {
   }
 }
 
-async function checkEmailVerification(button) {
-  if (!phase3State.user) return;
-  button.disabled = true;
-  button.textContent = "Checking…";
-  try {
-    await reload(phase3State.user);
-    await getIdToken(phase3State.user, true);
-    if (phase3State.user.emailVerified) {
-      await loadProfile(phase3State.user);
-      navigate("/activation-complete");
-    } else {
-      setAlert("verification-alert", "warning", "Not verified yet", "Firebase has not confirmed the email verification. Open the verification link and try again.");
-    }
-  } catch (error) {
-    console.error(error);
-    setAlert("verification-alert", "danger", "Verification check failed", "The portal could not refresh your Firebase account.");
-  } finally {
-    button.disabled = false;
-    button.innerHTML = `${icons.refresh} I verified my email`;
-  }
-}
-
-async function resendVerification(button) {
-  if (!phase3State.user) return;
-  button.disabled = true;
-  button.textContent = "Sending…";
-  try {
-    await sendEmailVerification(phase3State.user, { url: `${location.origin}/#/verify-email` });
-    setAlert("verification-alert", "success", "Verification email sent", "Check your inbox and spam folder for a new Firebase verification message.");
-  } catch (error) {
-    console.error(error);
-    setAlert("verification-alert", "danger", "Unable to send email", "Firebase may be limiting repeated verification messages. Wait briefly and try again.");
-  } finally {
-    button.disabled = false;
-    button.innerHTML = `${icons.mail} Resend verification email`;
-  }
-}
 
 async function loadMembershipSummary() {
   const target = document.querySelector("#activation-membership-summary");
-  if (!target || !phase3State.user?.emailVerified) return;
+  if (!target || !phase3State.user) return;
   try {
     const memberships = await getOwnMemberships();
     if (!memberships.length) {
@@ -978,10 +900,6 @@ function augmentExistingPortal() {
     sidebarNav.insertBefore(link, accountLabel || null);
   }
 
-  if (phase3State.user && phase3State.profile && CHAPTER_ROLES.has(phase3State.profile.systemRole) && !phase3State.user.emailVerified) {
-    const route = routeFromHash();
-    if (["/dashboard", "/profile"].includes(route)) navigate("/verify-email");
-  }
 }
 
 function bindPhase3Events() {
@@ -1023,8 +941,6 @@ function bindPhase3Events() {
         if (action === "sign-out") navigate("/login");
         else renderPhase3();
       }
-      if (action === "check-verification") await checkEmailVerification(element);
-      if (action === "resend-verification") await resendVerification(element);
       if (action === "refresh-invitations") await loadInvitations();
       if (action === "revoke-invite") await revokeInvitation(element.dataset.inviteId, element);
       if (action === "copy-issued-code") {
@@ -1064,7 +980,7 @@ async function renderPhase3() {
     document.title = route === "/admin/invitations"
       ? "Account Invitations | The Prayer Project"
       : route === "/verify-email"
-        ? "Verify Email | The Prayer Project"
+        ? "Account Activated | The Prayer Project"
         : route === "/activation-complete"
           ? "Account Activated | The Prayer Project"
           : "Activate Account | The Prayer Project";

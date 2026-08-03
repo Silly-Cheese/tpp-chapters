@@ -15,20 +15,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/systemUsers/$(request.auth.uid)).data;
     }
 
-    function chapterRoleRequiresVerifiedEmail() {
-      return hasUserRecord()
-        && currentUser().systemRole in ['director', 'adviser', 'chapterUser'];
-    }
-
-    function hasRequiredEmailVerification() {
-      return !chapterRoleRequiresVerifiedEmail()
-        || request.auth.token.email_verified == true;
-    }
 
     function isActive() {
       return hasUserRecord()
-        && currentUser().accountStatus == 'active'
-        && hasRequiredEmailVerification();
+        && currentUser().accountStatus == 'active';
     }
 
     function hasRole(allowedRoles) {
@@ -85,7 +75,6 @@ service cloud.firestore {
 
     function hasChapterMembership(chapterId) {
       return signedIn()
-        && request.auth.token.email_verified == true
         && exists(/databases/$(database)/documents/chapterMemberships/$(membershipId(chapterId, request.auth.uid)))
         && get(/databases/$(database)/documents/chapterMemberships/$(membershipId(chapterId, request.auth.uid))).data.status == 'active';
     }
@@ -787,7 +776,7 @@ service cloud.firestore {
       allow read: if isAdministrativeStaff();
       allow read: if signedIn()
         && resource.data.uid == request.auth.uid
-        && request.auth.token.email_verified == true;
+        && true;
       allow create: if canManageInvitations() || validSelfMembership(memberId);
       allow update, delete: if canManageInvitations();
     }
