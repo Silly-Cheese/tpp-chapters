@@ -87,6 +87,10 @@ function asDate(value) {
   return value ? new Date(`${value}T12:00:00`) : null;
 }
 
+function recordName(record) {
+  return record?.officialName || record?.chapterName || record?.name || state.chapterId;
+}
+
 function brand() {
   return `<a class="p4-brand" href="#/dashboard"><img src="assets/brand-mark.svg" alt=""><span><strong>The Prayer Project</strong><small>Administration</small></span></a>`;
 }
@@ -107,7 +111,7 @@ function layout(content) {
       <nav><a href="#/dashboard">${icons.home}<span>Dashboard</span></a><a href="#/admin/invitations">${icons.key}<span>Account invitations</span></a><a class="active" href="#/admin/chapter-workspaces">${icons.building}<span>Chapter workspaces</span></a><a href="#/verify">${icons.shield}<span>Public registry</span></a></nav>
       <div class="p4-admin-user"><strong>${escapeHTML(state.profile?.displayName || state.user?.email || "Administrator")}</strong><span>${escapeHTML(adminRoleLabel())}</span></div>
     </aside>
-    <div class="p4-admin-main"><header><div><span>Phase 4</span><strong>Chapter Workspace Setup</strong></div><button class="btn btn-secondary" type="button" data-p4a-action="sign-out">${icons.logout} Sign out</button></header><main id="main-content">${content}</main></div>
+    <div class="p4-admin-main"><header><div><span>Administration</span><strong>Chapter Workspace Setup</strong></div><button class="btn btn-secondary" type="button" data-p4a-action="sign-out">${icons.logout} Sign out</button></header><main id="main-content">${content}</main></div>
     <div class="toast-region" id="p4a-toast-region" aria-live="assertive"></div>
   </div>`;
 }
@@ -135,20 +139,29 @@ async function loadWorkspace(chapterId, { rerender = true } = {}) {
   if (rerender) render();
   try {
     const chapterRef = doc(db, "chapters", state.chapterId);
-    const [publicSnapshot, chapterSnapshot, requirementsSnapshot, leadersSnapshot, documentsSnapshot, noticesSnapshot] = await Promise.all([
+    const [publicSnapshot, chapterSnapshot] = await Promise.all([
       getDoc(doc(db, "publicChapterRegistry", state.chapterId)),
-      getDoc(chapterRef),
-      getDocs(collection(chapterRef, "requirements")),
-      getDocs(collection(chapterRef, "leaders")),
-      getDocs(collection(chapterRef, "documents")),
-      getDocs(collection(chapterRef, "notices"))
+      getDoc(chapterRef)
     ]);
     state.publicChapter = publicSnapshot.exists() ? { id: publicSnapshot.id, ...publicSnapshot.data() } : null;
     state.chapter = chapterSnapshot.exists() ? { id: chapterSnapshot.id, ...chapterSnapshot.data() } : null;
-    state.requirements = requirementsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
-    state.leaders = leadersSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => String(a.displayName).localeCompare(String(b.displayName)));
-    state.documents = documentsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => String(a.title).localeCompare(String(b.title)));
-    state.notices = noticesSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => (toDate(b.publishedAt)?.getTime() || 0) - (toDate(a.publishedAt)?.getTime() || 0));
+    state.requirements = [];
+    state.leaders = [];
+    state.documents = [];
+    state.notices = [];
+
+    if (state.chapter) {
+      const [requirementsSnapshot, leadersSnapshot, documentsSnapshot, noticesSnapshot] = await Promise.all([
+        getDocs(collection(chapterRef, "requirements")),
+        getDocs(collection(chapterRef, "leaders")),
+        getDocs(collection(chapterRef, "documents")),
+        getDocs(collection(chapterRef, "notices"))
+      ]);
+      state.requirements = requirementsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
+      state.leaders = leadersSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => String(a.displayName || "").localeCompare(String(b.displayName || "")));
+      state.documents = documentsSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+      state.notices = noticesSnapshot.docs.map((item) => ({ id: item.id, ...item.data() })).sort((a, b) => (toDate(b.publishedAt)?.getTime() || 0) - (toDate(a.publishedAt)?.getTime() || 0));
+    }
     localStorage.setItem("tpp-admin-workspace-chapter", state.chapterId);
   } catch (error) {
     console.error(error);
@@ -168,11 +181,11 @@ function emptyState() {
 }
 
 function notPublishedState() {
-  return `<section class="p4-admin-empty"><div>${icons.alert}</div><h2>Published chapter not found.</h2><p>Phase 4 workspaces can only be initialized for a Chapter ID already published in <code>publicChapterRegistry</code>.</p></section>`;
+  return `<section class="p4-admin-empty"><div>${icons.alert}</div><h2>Chapter registry record not found.</h2><p>Create or import this Chapter ID in <code>publicChapterRegistry</code> before initializing its private workspace. The record does not need to be publicly published.</p></section>`;
 }
 
 function initializePanel() {
-  return `<section class="p4-admin-empty p4-admin-initialize"><div>${icons.plus}</div><h2>Private workspace not initialized.</h2><p>${escapeHTML(state.publicChapter.officialName)} has a public registry record, but no private operational record. Initialization creates the standard compliance checklist and welcome notice.</p><button class="btn btn-primary" type="button" data-p4a-action="initialize">Initialize chapter workspace</button></section>`;
+  return `<section class="p4-admin-empty p4-admin-initialize"><div>${icons.plus}</div><h2>Private workspace not initialized.</h2><p>${escapeHTML(recordName(state.publicChapter))} has a registry record, but no private operational record. Initialization creates the standard compliance checklist and welcome notice.</p><button class="btn btn-primary" type="button" data-p4a-action="initialize">Initialize chapter workspace</button></section>`;
 }
 
 function workspaceTabs() {
@@ -214,8 +227,8 @@ function workspacePage() {
 function page() {
   if (!state.chapterId) return layout(`${searchPanel()}${emptyState()}`);
   if (state.loading) return layout(`${searchPanel()}<section class="p4-admin-empty"><div class="spinner"></div><h2>Loading workspace…</h2></section>`);
-  if (state.error) return layout(`${searchPanel()}<section class="p4-admin-empty"><div>${icons.alert}</div><h2>Unable to load workspace.</h2><p>${escapeHTML(state.error.message || "Firestore rejected the request.")}</p></section>`);
-  if (!state.publicChapter) return layout(`${searchPanel()}${notPublishedState()}`);
+  if (state.error) return layout(`${searchPanel()}<section class="p4-admin-empty"><div>${icons.alert}</div><h2>Unable to load workspace.</h2><p>${escapeHTML(state.error?.code === "permission-denied" ? "The updated administrative registry rule has not been deployed yet. Deploy the current Firestore rules and try again." : state.error.message || "Firestore rejected the request.")}</p></section>`);
+  if (!state.publicChapter && !state.chapter) return layout(`${searchPanel()}${notPublishedState()}`);
   if (!state.chapter) return layout(`${searchPanel()}${initializePanel()}`);
   return layout(workspacePage());
 }
@@ -257,7 +270,7 @@ async function initializeWorkspace(button) {
   const batch = writeBatch(db);
   batch.set(chapterRef, {
     chapterId: state.chapterId,
-    officialName: publicRecord.officialName,
+    officialName: recordName(publicRecord),
     hostInstitutionName: publicRecord.hostInstitutionName || "",
     institutionType: publicRecord.institutionType || "organization",
     city: publicRecord.city || "",

@@ -78,6 +78,11 @@ service cloud.firestore {
         && chapterId.matches('^TPP-CH-[A-Z0-9]{1,32}$');
     }
 
+    function invitationChapterIsReady(chapterId, chapterName) {
+      return exists(/databases/$(database)/documents/chapters/$(chapterId))
+        && get(/databases/$(database)/documents/chapters/$(chapterId)).data.officialName == chapterName;
+    }
+
     function hasChapterMembership(chapterId) {
       return signedIn()
         && request.auth.token.email_verified == true
@@ -728,7 +733,7 @@ service cloud.firestore {
     }
 
     match /publicChapterRegistry/{chapterId} {
-      allow get, list: if resource.data.isPublished == true;
+      allow get, list: if canManageChapterWorkspaces() || resource.data.isPublished == true;
       allow create, update, delete: if canManageRegistry();
     }
 
@@ -770,8 +775,10 @@ service cloud.firestore {
         && request.resource.data.createdByUid == request.auth.uid
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
-        && get(/databases/$(database)/documents/publicChapterRegistry/$(request.resource.data.chapterId)).data.isPublished == true
-        && get(/databases/$(database)/documents/publicChapterRegistry/$(request.resource.data.chapterId)).data.officialName == request.resource.data.chapterName;
+        && invitationChapterIsReady(
+          request.resource.data.chapterId,
+          request.resource.data.chapterName
+        );
       allow update: if canManageInvitations() || validInvitationClaim(inviteId);
       allow delete: if isOwner();
     }
