@@ -55,6 +55,10 @@ service cloud.firestore {
       return hasRole(['owner', 'chapterAdmin', 'complianceAdmin']);
     }
 
+    function canManageSupport() {
+      return hasRole(['owner', 'chapterAdmin', 'complianceAdmin', 'supportAgent']);
+    }
+
     function canReadChapterOperations() {
       return hasRole(['owner', 'chapterAdmin', 'complianceAdmin', 'supportAgent']);
     }
@@ -467,6 +471,238 @@ service cloud.firestore {
         && request.resource.data.uploadedAt == request.time;
     }
 
+    function supportTicket(ticketId) {
+      return get(/databases/$(database)/documents/supportTickets/$(ticketId)).data;
+    }
+
+    function supportTicketAfter(ticketId) {
+      return getAfter(/databases/$(database)/documents/supportTickets/$(ticketId)).data;
+    }
+
+    function canAccessSupportTicketData(ticket) {
+      return canManageSupport()
+        || (hasChapterMembership(ticket.chapterId)
+          && ((ticket.visibility == 'chapter'
+              && ('chapter:' + ticket.chapterId) in ticket.accessKeys)
+            || (ticket.visibility == 'adviser_private'
+              && ticket.createdByUid == request.auth.uid
+              && hasChapterMembershipRole(ticket.chapterId, ['adviser'])
+              && ('user:' + request.auth.uid) in ticket.accessKeys)));
+    }
+
+    function validNewSupportTicket(ticketId) {
+      let chapterId = request.resource.data.chapterId;
+      let membership = chapterMembership(chapterId);
+      return hasChapterMembershipRole(chapterId, ['director', 'adviser'])
+        && ticketId == request.resource.data.ticketId
+        && request.resource.data.keys().hasAll([
+          'ticketId', 'chapterId', 'chapterName', 'category', 'priority',
+          'visibility', 'subject', 'status', 'createdByUid', 'createdByName',
+          'createdByRole', 'assignedToUid', 'assignedToName', 'accessKeys',
+          'lastMessageAt', 'lastMessagePreview', 'lastMessageByUid',
+          'lastMessageByName', 'lastMessageSenderType', 'messageCount',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'ticketId', 'chapterId', 'chapterName', 'category', 'priority',
+          'visibility', 'subject', 'status', 'createdByUid', 'createdByName',
+          'createdByRole', 'assignedToUid', 'assignedToName', 'accessKeys',
+          'lastMessageAt', 'lastMessagePreview', 'lastMessageByUid',
+          'lastMessageByName', 'lastMessageSenderType', 'messageCount',
+          'createdAt', 'updatedAt'
+        ])
+        && chapterId is string
+        && chapterId.size() == 18
+        && request.resource.data.chapterName is string
+        && request.resource.data.chapterName.size() >= 2
+        && request.resource.data.chapterName.size() <= 180
+        && request.resource.data.category in [
+          'general_assistance', 'technical_support', 'chapter_compliance',
+          'document_review', 'leadership_change', 'renewal_assistance',
+          'institutional_concern', 'urgent_safety_concern'
+        ]
+        && request.resource.data.priority in ['low', 'normal', 'high', 'urgent']
+        && request.resource.data.visibility in ['chapter', 'adviser_private']
+        && (request.resource.data.visibility != 'adviser_private' || membership.role == 'adviser')
+        && request.resource.data.subject is string
+        && request.resource.data.subject.size() >= 5
+        && request.resource.data.subject.size() <= 160
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdByName is string
+        && request.resource.data.createdByName.size() >= 2
+        && request.resource.data.createdByName.size() <= 100
+        && request.resource.data.createdByRole == membership.role
+        && request.resource.data.assignedToUid == ''
+        && request.resource.data.assignedToName == ''
+        && request.resource.data.accessKeys is list
+        && ((request.resource.data.visibility == 'chapter'
+              && request.resource.data.accessKeys.size() == 2
+              && ('chapter:' + chapterId) in request.resource.data.accessKeys
+              && ('user:' + request.auth.uid) in request.resource.data.accessKeys)
+            || (request.resource.data.visibility == 'adviser_private'
+              && request.resource.data.accessKeys.size() == 1
+              && ('user:' + request.auth.uid) in request.resource.data.accessKeys))
+        && request.resource.data.lastMessageAt == request.time
+        && request.resource.data.lastMessagePreview is string
+        && request.resource.data.lastMessagePreview.size() >= 1
+        && request.resource.data.lastMessagePreview.size() <= 180
+        && request.resource.data.lastMessageByUid == request.auth.uid
+        && request.resource.data.lastMessageByName == request.resource.data.createdByName
+        && request.resource.data.lastMessageSenderType == 'chapter'
+        && request.resource.data.messageCount == 1
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validChapterSupportUpdate() {
+      return canAccessSupportTicketData(resource.data)
+        && !canManageSupport()
+        && ((request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+            && resource.data.status != 'closed'
+            && request.resource.data.status == 'closed'
+            && request.resource.data.updatedAt == request.time)
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'lastMessageAt', 'lastMessagePreview', 'lastMessageByUid',
+              'lastMessageByName', 'lastMessageSenderType', 'messageCount', 'updatedAt'
+            ])
+            && resource.data.status != 'closed'
+            && request.resource.data.status == 'awaiting_staff'
+            && request.resource.data.lastMessageAt == request.time
+            && request.resource.data.lastMessagePreview is string
+            && request.resource.data.lastMessagePreview.size() >= 1
+            && request.resource.data.lastMessagePreview.size() <= 180
+            && request.resource.data.lastMessageByUid == request.auth.uid
+            && request.resource.data.lastMessageByName is string
+            && request.resource.data.lastMessageByName.size() >= 2
+            && request.resource.data.lastMessageByName.size() <= 100
+            && request.resource.data.lastMessageSenderType == 'chapter'
+            && request.resource.data.messageCount == resource.data.messageCount + 1
+            && request.resource.data.updatedAt == request.time));
+    }
+
+    function validSupportMessage(ticketId) {
+      let ticket = supportTicketAfter(ticketId);
+      let staff = canManageSupport();
+      return canAccessSupportTicketData(ticket)
+        && ticket.status != 'closed'
+        && request.resource.data.keys().hasAll([
+          'ticketId', 'chapterId', 'authorUid', 'authorName', 'authorRole',
+          'senderType', 'body', 'hasAttachments', 'attachmentCount', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'ticketId', 'chapterId', 'authorUid', 'authorName', 'authorRole',
+          'senderType', 'body', 'hasAttachments', 'attachmentCount', 'createdAt'
+        ])
+        && request.resource.data.ticketId == ticketId
+        && request.resource.data.chapterId == ticket.chapterId
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.authorName is string
+        && request.resource.data.authorName.size() >= 2
+        && request.resource.data.authorName.size() <= 100
+        && request.resource.data.body is string
+        && request.resource.data.body.size() >= 1
+        && request.resource.data.body.size() <= 5000
+        && request.resource.data.hasAttachments == false
+        && request.resource.data.attachmentCount == 0
+        && request.resource.data.createdAt == request.time
+        && ((staff
+              && request.resource.data.senderType == 'staff'
+              && request.resource.data.authorRole in ['owner', 'chapterAdmin', 'complianceAdmin', 'supportAgent'])
+            || (!staff
+              && request.resource.data.senderType == 'chapter'
+              && request.resource.data.authorRole == chapterMembership(ticket.chapterId).role));
+    }
+
+    function validSupportMessageAttachmentUpdate(ticketId) {
+      let ticket = supportTicket(ticketId);
+      return canAccessSupportTicketData(ticket)
+        && (resource.data.authorUid == request.auth.uid || canManageSupport())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'hasAttachments', 'attachmentCount'
+        ])
+        && request.resource.data.hasAttachments == true
+        && request.resource.data.attachmentCount is int
+        && request.resource.data.attachmentCount >= 1
+        && request.resource.data.attachmentCount <= 5;
+    }
+
+    function validSupportAttachment(ticketId, messageId) {
+      let ticket = supportTicket(ticketId);
+      let message = get(/databases/$(database)/documents/supportTickets/$(ticketId)/messages/$(messageId)).data;
+      return canAccessSupportTicketData(ticket)
+        && (message.authorUid == request.auth.uid || canManageSupport())
+        && request.resource.data.keys().hasAll([
+          'ticketId', 'chapterId', 'messageId', 'uploadedByUid', 'fileName',
+          'storagePath', 'downloadUrl', 'contentType', 'size', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'ticketId', 'chapterId', 'messageId', 'uploadedByUid', 'fileName',
+          'storagePath', 'downloadUrl', 'contentType', 'size', 'createdAt'
+        ])
+        && request.resource.data.ticketId == ticketId
+        && request.resource.data.chapterId == ticket.chapterId
+        && request.resource.data.messageId == messageId
+        && request.resource.data.uploadedByUid == request.auth.uid
+        && request.resource.data.fileName is string
+        && request.resource.data.fileName.size() >= 1
+        && request.resource.data.fileName.size() <= 240
+        && request.resource.data.storagePath is string
+        && request.resource.data.storagePath.size() <= 700
+        && request.resource.data.downloadUrl is string
+        && request.resource.data.downloadUrl.size() <= 2000
+        && request.resource.data.contentType in [
+          'application/pdf', 'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'image/png', 'image/jpeg'
+        ]
+        && request.resource.data.size is int
+        && request.resource.data.size > 0
+        && request.resource.data.size <= 10485760
+        && request.resource.data.createdAt == request.time;
+    }
+
+    function validSupportReadState(readStateId) {
+      let ticket = supportTicketAfter(request.resource.data.ticketId);
+      return signedIn()
+        && readStateId == request.resource.data.ticketId + '__' + request.auth.uid
+        && canAccessSupportTicketData(ticket)
+        && request.resource.data.keys().hasAll([
+          'ticketId', 'chapterId', 'uid', 'lastReadAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'ticketId', 'chapterId', 'uid', 'lastReadAt', 'updatedAt'
+        ])
+        && request.resource.data.chapterId == ticket.chapterId
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.lastReadAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validInternalSupportNote(ticketId) {
+      let ticket = supportTicket(ticketId);
+      return canManageSupport()
+        && request.resource.data.keys().hasAll([
+          'ticketId', 'chapterId', 'authorUid', 'authorName', 'authorRole',
+          'body', 'createdAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'ticketId', 'chapterId', 'authorUid', 'authorName', 'authorRole',
+          'body', 'createdAt'
+        ])
+        && request.resource.data.ticketId == ticketId
+        && request.resource.data.chapterId == ticket.chapterId
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.authorName is string
+        && request.resource.data.authorName.size() >= 2
+        && request.resource.data.authorName.size() <= 100
+        && request.resource.data.authorRole in ['owner', 'chapterAdmin', 'complianceAdmin', 'supportAgent']
+        && request.resource.data.body is string
+        && request.resource.data.body.size() >= 3
+        && request.resource.data.body.size() <= 3000
+        && request.resource.data.createdAt == request.time;
+    }
+
     match /systemUsers/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow read: if isAdministrativeStaff();
@@ -604,6 +840,42 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data.submittedByUid == request.auth.uid
             && get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data.status in ['draft', 'changes_requested']);
       }
+    }
+
+    match /supportTickets/{ticketId} {
+      allow read: if canAccessSupportTicketData(resource.data);
+      allow create: if validNewSupportTicket(ticketId);
+      allow update: if canManageSupport() || validChapterSupportUpdate();
+      allow delete: if isOwner();
+
+      match /messages/{messageId} {
+        allow read: if canAccessSupportTicketData(supportTicket(ticketId));
+        allow create: if validSupportMessage(ticketId);
+        allow update: if validSupportMessageAttachmentUpdate(ticketId);
+        allow delete: if isOwner();
+
+        match /attachments/{attachmentId} {
+          allow read: if canAccessSupportTicketData(supportTicket(ticketId));
+          allow create: if validSupportAttachment(ticketId, messageId);
+          allow update: if false;
+          allow delete: if isOwner() || canManageSupport();
+        }
+      }
+
+      match /internalNotes/{noteId} {
+        allow read: if canManageSupport();
+        allow create: if validInternalSupportNote(ticketId);
+        allow update: if false;
+        allow delete: if isOwner();
+      }
+    }
+
+    match /supportReadStates/{readStateId} {
+      allow read: if canManageSupport()
+        || (signedIn() && resource.data.uid == request.auth.uid
+          && canAccessSupportTicketData(supportTicket(resource.data.ticketId)));
+      allow create, update: if validSupportReadState(readStateId);
+      allow delete: if isOwner() || (signedIn() && resource.data.uid == request.auth.uid);
     }
 
     match /unauthorizedChapterReports/{reportId} {
