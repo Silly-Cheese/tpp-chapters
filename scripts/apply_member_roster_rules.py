@@ -1,7 +1,7 @@
 from pathlib import Path
 
-path = Path("firestore.rules")
-text = path.read_text(encoding="utf-8")
+rules_path = Path("firestore.rules")
+text = rules_path.read_text(encoding="utf-8")
 
 function_anchor = """    function submissionTypeAllowed(chapterId, type) {
 """
@@ -107,5 +107,26 @@ if "match /members/{memberId}" not in text:
         raise SystemExit("Could not find chapter member match insertion point")
     text = text.replace(match_anchor, member_match + match_anchor, 1)
 
-path.write_text(text, encoding="utf-8")
-print("Chapter member roster Firestore rules applied.")
+rules_path.write_text(text, encoding="utf-8")
+
+script_path = Path("assets/js/chapter-portal-mobile-members.js")
+script = script_path.read_text(encoding="utf-8")
+script = script.replace("  memberState.ready = Boolean(user);", "  memberState.ready = true;", 1)
+script_path.write_text(script, encoding="utf-8")
+
+workflow_path = Path(".github/workflows/validate.yml")
+workflow = workflow_path.read_text(encoding="utf-8")
+marker = """      - name: Validate unified chapter portal
+        run: python3 scripts/validate_chapter_portal_v2.py
+"""
+step = marker + """
+      - name: Validate mobile drawer and member roster
+        run: python3 scripts/validate_mobile_members_roster.py
+"""
+if "Validate mobile drawer and member roster" not in workflow:
+    if marker not in workflow:
+        raise SystemExit("Could not find normal portal validation step")
+    workflow = workflow.replace(marker, step, 1)
+workflow_path.write_text(workflow, encoding="utf-8")
+
+print("Chapter member roster rules and portal fixes applied.")
