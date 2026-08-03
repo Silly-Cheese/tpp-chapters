@@ -17,7 +17,7 @@ import { auth, db, authPersistenceReady } from "./firebase.js";
 const app = document.querySelector("#app");
 const ROUTE = "/admin/chapter-workspaces";
 const ADMIN_ROLES = new Set(["owner", "chapterAdmin", "complianceAdmin"]);
-const CHAPTER_ID_PATTERN = /^TPP-CH-\d{4}-\d{6}$/;
+const CHAPTER_ID_PATTERN = /^TPP-CH-[A-Z0-9]{1,32}$/;
 
 const state = {
   authReady: false,
@@ -126,7 +126,7 @@ async function loadProfile(user) {
 async function loadWorkspace(chapterId, { rerender = true } = {}) {
   state.chapterId = String(chapterId || "").trim().toUpperCase();
   if (!CHAPTER_ID_PATTERN.test(state.chapterId)) {
-    state.error = new Error("Use the permanent format TPP-CH-YYYY-######.");
+    state.error = new Error("Use TPP-CH- followed by letters and/or numbers, such as TPP-CH-A1B2C3.");
     if (rerender) render();
     return;
   }
@@ -160,7 +160,7 @@ async function loadWorkspace(chapterId, { rerender = true } = {}) {
 }
 
 function searchPanel() {
-  return `<section class="p4-admin-search"><div><p class="p4-kicker">Private portal setup</p><h1>Manage chapter workspaces.</h1><p>Initialize and maintain the private operational record used by Chapter Directors and Chapter Advisers.</p></div><form id="p4a-load-form"><label><span>Permanent Chapter ID</span><div><input name="chapterId" value="${escapeHTML(state.chapterId)}" placeholder="TPP-CH-2026-000001" required><button class="btn btn-primary" type="submit">Load workspace</button></div></label></form></section>`;
+  return `<section class="p4-admin-search"><div><p class="p4-kicker">Private portal setup</p><h1>Manage chapter workspaces.</h1><p>Initialize and maintain the private operational record used by Chapter Directors and Chapter Advisers.</p></div><form id="p4a-load-form"><label><span>Permanent Chapter ID</span><div><input name="chapterId" value="${escapeHTML(state.chapterId)}" placeholder="TPP-CH-A1B2C3" required><button class="btn btn-primary" type="submit">Load workspace</button></div></label></form></section>`;
 }
 
 function emptyState() {

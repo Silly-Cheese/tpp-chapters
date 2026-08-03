@@ -12,7 +12,7 @@ The Firestore document ID and `chapterId` field should be the same permanent ID.
 
 | Field | Type | Example |
 |---|---|---|
-| `chapterId` | string | `TPP-CH-2026-000001` |
+| `chapterId` | string | `TPP-CH-A1B2C3` |
 | `officialName` | string | `The Prayer Project at Central High School` |
 | `hostInstitutionName` | string | `Central High School` |
 | `institutionType` | string | `school`, `church`, or `organization` |
@@ -82,7 +82,7 @@ Use plain lowercase letters and numbers. Include common abbreviations, but do no
 ## Direct verification URL
 
 ```text
-https://chapter.ask4prayers.com/verify/TPP-CH-2026-000001
+https://chapter.ask4prayers.com/verify/TPP-CH-A1B2C3
 ```
 
 GitHub Pages redirects that path into the application's hash route. The verification page generates a QR code for the same stable address.

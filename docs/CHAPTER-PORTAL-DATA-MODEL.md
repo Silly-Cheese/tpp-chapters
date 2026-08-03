@@ -14,7 +14,7 @@ Recommended fields:
 
 ```javascript
 {
-  chapterId: "TPP-CH-2026-000001",
+  chapterId: "TPP-CH-A1B2C3",
   officialName: "The Prayer Project at Example School",
   hostInstitutionName: "Example School",
   institutionType: "school",

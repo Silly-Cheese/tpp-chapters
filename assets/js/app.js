@@ -67,7 +67,7 @@ const STANDING_LABELS = Object.freeze({
 });
 
 const ACTIVE_ACCOUNT_STATUSES = new Set(["active"]);
-const DIRECT_ID_PATTERN = /^TPP-CH-\d{4}-\d{6}$/;
+const DIRECT_ID_PATTERN = /^TPP-CH-[A-Z0-9]{1,32}$/;
 
 const icons = {
   home: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>`,
@@ -289,7 +289,7 @@ function publicHome() {
         <h1>Verify a Prayer Project chapter.</h1>
         <p class="hero-copy">Confirm a chapter's official identity, authorization status, standing, host institution, and renewal information through the ministry's public source of truth.</p>
         ${registrySearchForm()}
-        <p class="registry-search-note">Official Chapter IDs follow the format <strong>TPP-CH-YYYY-000000</strong>.</p>
+        <p class="registry-search-note">Official Chapter IDs follow the format <strong>TPP-CH-A1B2C3</strong>.</p>
       </div>
     </section>
 
@@ -452,7 +452,7 @@ function reportChapterPage() {
               <div class="field"><label for="relationship">Your relationship to the concern</label><select class="input" id="relationship" name="relationship" required><option value="">Select one</option><option>School or church leader</option><option>Parent or guardian</option><option>Volunteer or participant</option><option>Community member</option><option>Prayer Project chapter leader</option><option>Other</option></select></div>
               <div class="form-row">
                 <div class="field"><label for="reported-chapter-name">Chapter or group name</label><input class="input" id="reported-chapter-name" name="chapterName" type="text" maxlength="160" value="${escapeHTML(chapterName)}" required></div>
-                <div class="field"><label for="reported-chapter-id">Claimed Chapter ID <span class="optional">optional</span></label><input class="input" id="reported-chapter-id" name="chapterId" type="text" maxlength="40" value="${escapeHTML(chapterId)}" placeholder="TPP-CH-YYYY-000000"></div>
+                <div class="field"><label for="reported-chapter-id">Claimed Chapter ID <span class="optional">optional</span></label><input class="input" id="reported-chapter-id" name="chapterId" type="text" maxlength="39" value="${escapeHTML(chapterId)}" placeholder="TPP-CH-A1B2C3"></div>
               </div>
               <div class="form-row">
                 <div class="field"><label for="reported-institution">School, church, or organization</label><input class="input" id="reported-institution" name="institution" type="text" maxlength="180" required></div>
@@ -715,7 +715,7 @@ async function loadVerificationRecord(rawId) {
   if (!root) return;
   const chapterId = normalizeChapterId(rawId);
   if (!DIRECT_ID_PATTERN.test(chapterId)) {
-    root.innerHTML = registryError("Invalid Chapter ID", "The Chapter ID does not match the official format TPP-CH-YYYY-000000.");
+    root.innerHTML = registryError("Invalid Chapter ID", "The Chapter ID must begin with TPP-CH- and end with letters and/or numbers.");
     return;
   }
   try {
