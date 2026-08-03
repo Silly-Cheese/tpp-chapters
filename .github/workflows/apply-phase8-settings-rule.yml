@@ -31,24 +31,31 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path("firestore.rules")
           text = path.read_text(encoding="utf-8")
-          old = """    match /systemSettings/{documentId} {
-              allow read: if isActive();
-              allow create, update, delete: if isOwner();
-            }"""
-          new = """    match /systemSettings/{documentId} {
-              allow get: if documentId == 'portal' || isActive();
-              allow list: if isActive();
-              allow create, update, delete: if isOwner();
-            }"""
-          if new in text:
+          if "allow get: if documentId == 'portal' || isActive();" in text:
               print("Phase 8 system settings rule is already present.")
-          elif old in text:
-              path.write_text(text.replace(old, new, 1), encoding="utf-8")
           else:
-              raise SystemExit("Expected systemSettings rule block was not found.")
+              pattern = re.compile(
+                  r"(?m)^(?P<indent>[ \t]*)match /systemSettings/\{documentId\} \{\s*\n"
+                  r"[ \t]*allow read: if isActive\(\);\s*\n"
+                  r"[ \t]*allow create, update, delete: if isOwner\(\);\s*\n"
+                  r"[ \t]*\}"
+              )
+              match = pattern.search(text)
+              if not match:
+                  raise SystemExit("Expected systemSettings rule block was not found.")
+              indent = match.group("indent")
+              replacement = (
+                  f"{indent}match /systemSettings/{{documentId}} {{\n"
+                  f"{indent}  allow get: if documentId == 'portal' || isActive();\n"
+                  f"{indent}  allow list: if isActive();\n"
+                  f"{indent}  allow create, update, delete: if isOwner();\n"
+                  f"{indent}}}"
+              )
+              path.write_text(pattern.sub(replacement, text, count=1), encoding="utf-8")
           PY
 
       - name: Validate repository
