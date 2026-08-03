@@ -1,29 +1,51 @@
-/* Production portal routing and cache-recovery refinements. */
+/* Production portal routing, cache recovery, and access-page refinements. */
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
 
 .portal-access-shell {
   min-height: calc(100vh - 180px);
   display: grid;
   place-items: center;
   padding: clamp(42px, 8vw, 96px) 20px;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 82% 12%, color-mix(in srgb, var(--gold), transparent 88%), transparent 34%),
+    var(--cream);
 }
 
 .portal-access-card {
   width: min(760px, 100%);
-  border: 1px solid var(--border, rgba(181, 143, 70, 0.28));
-  border-radius: 28px;
-  background: var(--surface, #fffdf8);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.12);
   padding: clamp(28px, 6vw, 56px);
+  overflow: hidden;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  background: var(--paper);
+  box-shadow: var(--shadow-lg);
+}
+
+.portal-access-card .eyebrow {
+  color: var(--gold-dark);
 }
 
 .portal-access-card h1 {
   margin: 10px 0 16px;
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
   font-size: clamp(2.35rem, 7vw, 4.8rem);
+  font-weight: 600;
   line-height: 0.95;
+  letter-spacing: -0.035em;
 }
 
 .portal-access-card > p {
   max-width: 62ch;
+  margin: 0;
+  color: var(--muted);
   font-size: 1.05rem;
   line-height: 1.75;
 }
@@ -36,10 +58,12 @@
 }
 
 .portal-access-option {
-  border: 1px solid var(--border, rgba(181, 143, 70, 0.28));
-  border-radius: 20px;
+  min-width: 0;
   padding: 22px;
-  background: rgba(181, 143, 70, 0.06);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--cream);
 }
 
 .portal-access-option strong,
@@ -47,16 +71,28 @@
   display: block;
 }
 
+.portal-access-option strong {
+  color: var(--ink);
+  font-size: 1.02rem;
+}
+
 .portal-access-option span {
   margin-top: 8px;
+  color: var(--muted);
   line-height: 1.55;
-  opacity: 0.78;
+  opacity: 1;
 }
 
 .portal-access-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.portal-access-actions .btn-secondary {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--paper);
 }
 
 .p8-error-detail {
@@ -93,8 +129,35 @@
     padding-inline: 18px;
   }
 
+  .portal-access-shell {
+    min-height: auto;
+    place-items: stretch;
+    padding: 28px 18px 44px;
+  }
+
+  .portal-access-card {
+    width: 100%;
+    padding: 30px 24px;
+    border-radius: 24px;
+  }
+
+  .portal-access-card h1 {
+    font-size: clamp(2.55rem, 13vw, 3.75rem);
+    line-height: 0.98;
+  }
+
+  .portal-access-card > p {
+    font-size: 1rem;
+    line-height: 1.65;
+  }
+
   .portal-access-grid {
     grid-template-columns: 1fr;
+    margin-block: 24px;
+  }
+
+  .portal-access-option {
+    padding: 20px;
   }
 
   .portal-access-actions {
