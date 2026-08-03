@@ -17,7 +17,6 @@ The official public registry and private operations platform for Prayer Project 
 - Permanent Chapter ID verification
 - Public chapter search and directory
 - Authorization and standing displays
-- Approval, renewal, and verification dates
 - Stable verification links and QR codes
 - Unauthorized chapter concern reports
 
@@ -32,27 +31,32 @@ The official public registry and private operations platform for Prayer Project 
 
 ### Phase 4 — Director and Adviser portals
 
-- Chapter overview and standing
-- Compliance requirements
-- Approved leadership roster
-- Official document library
-- Chapter notices and acknowledgments
+- Chapter overview, standing, and compliance requirements
+- Approved leadership roster and official document library
+- Chapter notices and individual acknowledgments
 - Adviser-only oversight and confidential check-ins
 - Administrative chapter-workspace setup
 
 ### Phase 5 — Reports and operational workflows
 
-- Meeting reports
-- Quarterly and annual activity reports
-- Event proposals
-- Leadership and institution change requests
-- Temporary inactivity requests
-- Document submissions
-- Annual chapter renewals
-- Annual Adviser confirmations
-- Draft saving and resubmission after requested changes
-- Administrative review queue and decisions
+- Meeting and activity reports
+- Event proposals and change requests
+- Temporary inactivity and document submissions
+- Annual chapter renewals and Adviser confirmations
+- Drafts, corrections, resubmission, and administrative decisions
 - Secure PDF, Word, PNG, and JPEG attachments
+
+### Phase 6 — Support and communications
+
+- Real-time chapter support tickets and message threads
+- Shared chapter conversations
+- Confidential Adviser-only conversations
+- Ticket categories, priorities, statuses, assignment, and escalation
+- Staff support queue and internal staff notes
+- Message attachments through Firebase Storage
+- Read-state and unread-message tracking
+- Communications center combining chapter notices and support activity
+- Administrative chapter-notice publishing
 
 ## Production address
 
@@ -80,7 +84,7 @@ firebase use tpp-chapters
 firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
-Phase 5 changes both Firestore and Cloud Storage Rules. No new composite Firestore index is required for Phase 5.
+Phase 6 adds support-ticket indexes and changes both Firestore and Cloud Storage Rules. New indexes can take several minutes to become available.
 
 ### Owner account
 
@@ -126,6 +130,10 @@ updatedAt: <timestamp>
 /#/chapter/adviser
 /#/chapter/workflows
 /#/chapter/submissions
+/#/chapter/communications
+/#/chapter/support
+/#/chapter/support/new
+/#/chapter/support/ticket?id={ticketId}
 ```
 
 ### Administration
@@ -134,6 +142,9 @@ updatedAt: <timestamp>
 /#/admin/invitations
 /#/admin/chapter-workspaces
 /#/admin/submissions
+/#/admin/support
+/#/admin/support/ticket?id={ticketId}
+/#/admin/communications
 ```
 
 ## Core collections
@@ -145,15 +156,26 @@ chapterInvitations
 chapterMemberships
 chapters
 chapterSubmissions
+supportTickets
+supportReadStates
 unauthorizedChapterReports
 auditLogs
 ```
 
-Phase 5 attachments use:
+Support records use:
 
 ```text
-chapterSubmissions/{submissionId}/attachments/{attachmentId}
-chapter-submissions/{chapterId}/{submissionId}/{uid}/{fileName}
+supportTickets/{ticketId}/messages/{messageId}
+supportTickets/{ticketId}/messages/{messageId}/attachments/{attachmentId}
+supportTickets/{ticketId}/internalNotes/{noteId}
+supportReadStates/{ticketId}__{uid}
+```
+
+Support attachment objects use:
+
+```text
+support-attachments/chapter/{chapterId}/{ticketId}/{messageId}/{uid}/{fileName}
+support-attachments/staff/{chapterId}/{ticketId}/{messageId}/{uid}/{fileName}
 ```
 
 ## Role values
@@ -177,11 +199,13 @@ Director, Adviser, and chapter-user accounts require verified Firebase email bef
 - [`PHASE-3-NOTES.md`](PHASE-3-NOTES.md)
 - [`PHASE-4-NOTES.md`](PHASE-4-NOTES.md)
 - [`PHASE-5-NOTES.md`](PHASE-5-NOTES.md)
+- [`PHASE-6-NOTES.md`](PHASE-6-NOTES.md)
 - [`docs/REGISTRY-DATA-MODEL.md`](docs/REGISTRY-DATA-MODEL.md)
 - [`docs/ACCOUNT-ACTIVATION-DATA-MODEL.md`](docs/ACCOUNT-ACTIVATION-DATA-MODEL.md)
 - [`docs/CHAPTER-PORTAL-DATA-MODEL.md`](docs/CHAPTER-PORTAL-DATA-MODEL.md)
 - [`docs/SUBMISSION-WORKFLOW-DATA-MODEL.md`](docs/SUBMISSION-WORKFLOW-DATA-MODEL.md)
-- [`docs/PHASE-5-SETUP.md`](docs/PHASE-5-SETUP.md)
+- [`docs/SUPPORT-COMMUNICATIONS-DATA-MODEL.md`](docs/SUPPORT-COMMUNICATIONS-DATA-MODEL.md)
+- [`docs/PHASE-6-SETUP.md`](docs/PHASE-6-SETUP.md)
 
 ## Local testing
 
@@ -198,6 +222,6 @@ Then open `http://localhost:8080` and add `localhost` to Firebase Authentication
 3. Account invitations and activation — complete
 4. Director and Adviser portals — complete
 5. Reports, renewals, and operational workflows — complete
-6. Internal support chat and notices
+6. Real-time support and communications — complete
 7. Full administrative management
 8. Security review, testing, documentation, and production finalization

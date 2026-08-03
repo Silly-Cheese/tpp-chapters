@@ -16,6 +16,25 @@
         { "fieldPath": "searchTokens", "arrayConfig": "CONTAINS" },
         { "fieldPath": "officialName", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "supportTickets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "chapterId", "order": "ASCENDING" },
+        { "fieldPath": "visibility", "order": "ASCENDING" },
+        { "fieldPath": "accessKeys", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "supportTickets",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "chapterId", "order": "ASCENDING" },
+        { "fieldPath": "visibility", "order": "ASCENDING" },
+        { "fieldPath": "createdByUid", "order": "ASCENDING" },
+        { "fieldPath": "accessKeys", "arrayConfig": "CONTAINS" }
+      ]
     }
   ],
   "fieldOverrides": []
