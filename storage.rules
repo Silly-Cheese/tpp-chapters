@@ -2,8 +2,63 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Phase 1 reserves Cloud Storage but does not expose uploads yet.
-    // Later phases will add role-aware paths for chapter documents and support attachments.
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdministrativeReviewer() {
+      let user = firestore.get(/databases/(default)/documents/systemUsers/$(request.auth.uid)).data;
+      return signedIn()
+        && user.accountStatus == 'active'
+        && user.systemRole in ['owner', 'chapterAdmin', 'complianceAdmin'];
+    }
+
+    function membershipKey(chapterId) {
+      return chapterId + '__' + request.auth.uid;
+    }
+
+    function hasChapterMembership(chapterId) {
+      let membership = firestore.get(/databases/(default)/documents/chapterMemberships/$(membershipKey(chapterId))).data;
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && membership.status == 'active';
+    }
+
+    function ownsEditableSubmission(chapterId, submissionId) {
+      let item = firestore.get(/databases/(default)/documents/chapterSubmissions/$(submissionId)).data;
+      return item.chapterId == chapterId
+        && item.submittedByUid == request.auth.uid
+        && item.status in ['draft', 'changes_requested'];
+    }
+
+    function allowedContentType() {
+      return request.resource.contentType in [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/png',
+        'image/jpeg'
+      ];
+    }
+
+    match /chapter-submissions/{chapterId}/{submissionId}/{uid}/{fileName} {
+      allow read: if isAdministrativeReviewer() || hasChapterMembership(chapterId);
+
+      allow create, update: if signedIn()
+        && request.auth.uid == uid
+        && hasChapterMembership(chapterId)
+        && ownsEditableSubmission(chapterId, submissionId)
+        && request.resource.size > 0
+        && request.resource.size <= 10 * 1024 * 1024
+        && allowedContentType();
+
+      allow delete: if isAdministrativeReviewer()
+        || (signedIn()
+          && request.auth.uid == uid
+          && hasChapterMembership(chapterId)
+          && ownsEditableSubmission(chapterId, submissionId));
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

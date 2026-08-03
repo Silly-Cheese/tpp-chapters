@@ -1,63 +1,58 @@
 # The Prayer Project — Chapter Registry & Operations Portal
 
-The official public registry and private operations portal for Prayer Project chapters.
+The official public registry and private operations platform for Prayer Project chapters.
 
 ## Current release
 
 ### Phase 1 — Foundation and design system
 
-- Responsive black, cream, white, and gold design system
-- Firebase Email/Password sign-in and password reset
-- Persistent authenticated sessions
-- Firestore-backed portal profiles and roles
-- Owner, administrator, Director, and Adviser route protection
-- Profile editing with field-restricted Security Rules
+- Responsive black, cream, white, and gold interface
+- Firebase Email/Password authentication
+- Persistent sessions, password reset, profiles, roles, and protected routing
+- Owner, staff, Director, and Adviser account foundations
 - Light and dark themes
-- GitHub Pages custom-domain configuration
 
-### Phase 2 — Public chapter registry and verification
+### Phase 2 — Public chapter registry
 
-- Public Chapter ID verification
-- Search by approved public search token
-- Published chapter directory
+- Permanent Chapter ID verification
+- Public chapter search and directory
 - Authorization and standing displays
-- Approval, renewal, and last-verified dates
-- Stable verification URLs and QR codes
-- Copy-link and print actions
-- Public explanation of the registry
+- Approval, renewal, and verification dates
+- Stable verification links and QR codes
 - Unauthorized chapter concern reports
-- Firestore rules for public/private data separation
-- Composite indexes for directory and search queries
 
 ### Phase 3 — Account invitations and activation
 
-- Owner and Chapter Administrator invitation workspace
-- Single-use Director and Adviser activation codes
-- Published Chapter ID validation before invitation issuance
-- SHA-256 code hashing before Firestore storage
-- Configurable invitation expiration
-- Invitation history and revocation
-- New Firebase account creation and existing-account connection
-- Atomic invitation claim, portal-profile creation, and chapter-membership creation
-- Assigned-email and assigned-role enforcement
+- Secure Director and Adviser invitations
+- Single-use activation codes stored as SHA-256 hashes
+- New-account and existing-account activation
+- Assigned chapter, role, and email enforcement
 - Firebase email verification
+- Atomic portal profile and chapter membership creation
 
 ### Phase 4 — Director and Adviser portals
 
-- Complete role-aware chapter workspace
-- Multiple-chapter membership selector
-- Live authorization status, standing, and renewal countdown
-- Compliance requirements and progress
+- Chapter overview and standing
+- Compliance requirements
 - Approved leadership roster
-- Agreement and training status displays
 - Official document library
 - Chapter notices and acknowledgments
-- Adviser-only oversight dashboard
-- Confidential Adviser check-ins
-- Administrative workspace initialization and maintenance
-- Standard compliance checklist creation
-- Leadership synchronization from active memberships
-- Chapter-scoped Firestore access controls
+- Adviser-only oversight and confidential check-ins
+- Administrative chapter-workspace setup
+
+### Phase 5 — Reports and operational workflows
+
+- Meeting reports
+- Quarterly and annual activity reports
+- Event proposals
+- Leadership and institution change requests
+- Temporary inactivity requests
+- Document submissions
+- Annual chapter renewals
+- Annual Adviser confirmations
+- Draft saving and resubmission after requested changes
+- Administrative review queue and decisions
+- Secure PDF, Word, PNG, and JPEG attachments
 
 ## Production address
 
@@ -67,20 +62,17 @@ The official public registry and private operations portal for Prayer Project ch
 
 `tpp-chapters`
 
-The Firebase web configuration is public client configuration by design. Never commit a service-account key, Admin SDK private credential, or other server secret.
+The Firebase web configuration is public client configuration by design. Never commit service-account keys, Admin SDK credentials, or server secrets.
 
 ## Required Firebase setup
 
-### 1. Authentication
+### Authentication
 
-In Firebase Console:
+1. Enable **Email/Password** under **Authentication → Sign-in method**.
+2. Add `chapter.ask4prayers.com` and `silly-cheese.github.io` to authorized domains when necessary.
+3. Review the email-verification template.
 
-1. Open **Authentication → Sign-in method**.
-2. Enable **Email/Password**.
-3. Add `chapter.ask4prayers.com` and `silly-cheese.github.io` to authorized domains when needed.
-4. Review the email-verification template under **Authentication → Templates**.
-
-### 2. Deploy Firestore Rules and indexes
+### Deploy Rules and indexes
 
 ```bash
 firebase login
@@ -88,116 +80,80 @@ firebase use tpp-chapters
 firebase deploy --only firestore:rules,firestore:indexes,storage
 ```
 
-The Phase 2 composite indexes may take several minutes to build. Phases 3 and 4 do not require additional composite indexes.
+Phase 5 changes both Firestore and Cloud Storage Rules. No new composite Firestore index is required for Phase 5.
 
-### 3. Create the first Owner account
+### Owner account
 
-1. In **Firebase Authentication → Users**, create the Owner email/password account.
-2. Copy the Firebase UID.
-3. Create `systemUsers/{OWNER_UID}` in Firestore with:
-
-| Field | Type | Value |
-|---|---|---|
-| `displayName` | string | `Christopher Shelley` |
-| `email` | string | Owner account email |
-| `systemRole` | string | `owner` |
-| `accountStatus` | string | `active` |
-| `createdAt` | timestamp | Current date/time |
-| `updatedAt` | timestamp | Current date/time |
-
-A Firebase Authentication account alone does not grant portal access. The matching active `systemUsers` record is required.
-
-### 4. Publish chapter records
-
-Public records use:
+Create the Owner in Firebase Authentication, then create:
 
 ```text
-publicChapterRegistry/{chapterId}
+systemUsers/{OWNER_UID}
 ```
 
-Read [`docs/REGISTRY-DATA-MODEL.md`](docs/REGISTRY-DATA-MODEL.md) before creating a record. Set `isPublished` to `true` only when the record is ready for public viewing.
+with:
 
-### 5. Issue chapter account invitations
+```text
+displayName: Christopher Shelley
+email: <owner email>
+systemRole: owner
+accountStatus: active
+createdAt: <timestamp>
+updatedAt: <timestamp>
+```
 
-Active `owner` and `chapterAdmin` accounts can open:
+## Main routes
+
+### Public
+
+```text
+/#/verify
+/#/verify/{chapterId}
+/#/chapters
+/#/report-chapter
+/#/activate
+/#/login
+```
+
+### Chapter leadership
+
+```text
+/#/dashboard
+/#/chapter/overview
+/#/chapter/compliance
+/#/chapter/leadership
+/#/chapter/documents
+/#/chapter/notices
+/#/chapter/adviser
+/#/chapter/workflows
+/#/chapter/submissions
+```
+
+### Administration
 
 ```text
 /#/admin/invitations
-```
-
-Read:
-
-- [`docs/ACCOUNT-ACTIVATION-DATA-MODEL.md`](docs/ACCOUNT-ACTIVATION-DATA-MODEL.md)
-- [`docs/PHASE-3-SETUP.md`](docs/PHASE-3-SETUP.md)
-
-### 6. Initialize private chapter workspaces
-
-Active `owner`, `chapterAdmin`, and `complianceAdmin` accounts can open:
-
-```text
 /#/admin/chapter-workspaces
+/#/admin/submissions
 ```
 
-Enter a published permanent Chapter ID and initialize its private workspace. Read:
-
-- [`docs/CHAPTER-PORTAL-DATA-MODEL.md`](docs/CHAPTER-PORTAL-DATA-MODEL.md)
-- [`docs/PHASE-4-SETUP.md`](docs/PHASE-4-SETUP.md)
-
-## Public routes
+## Core collections
 
 ```text
-/                         Registry homepage
-/#/verify                 Registry search
-/#/verify/{chapterId}     Live verification record
-/#/chapters               Published chapter directory
-/#/about-verification     Registry explanation
-/#/report-chapter         Public concern report
-/#/activate               Chapter account activation
-/#/verify-email           Firebase email verification
-/#/activation-complete    Activation confirmation
-/#/login                  Portal login
+systemUsers
+publicChapterRegistry
+chapterInvitations
+chapterMemberships
+chapters
+chapterSubmissions
+unauthorizedChapterReports
+auditLogs
 ```
 
-## Chapter routes
+Phase 5 attachments use:
 
 ```text
-/#/dashboard              Chapter overview for Director and Adviser accounts
-/#/chapter/overview       Chapter overview
-/#/chapter/compliance     Standing and compliance
-/#/chapter/leadership     Approved leadership roster
-/#/chapter/documents      Official document library
-/#/chapter/notices        Chapter communications
-/#/chapter/adviser        Adviser-only oversight and check-ins
-```
-
-## Administrative routes
-
-```text
-/#/dashboard                    Role-specific dashboard
-/#/profile                      Account profile
-/#/admin/invitations            Director and Adviser invitation management
-/#/admin/chapter-workspaces     Private chapter workspace setup
-```
-
-## Public and private data
-
-Public verification data belongs only in `publicChapterRegistry`. Private operational data belongs in:
-
-```text
-chapters/{chapterId}
-chapters/{chapterId}/requirements/{requirementId}
-chapters/{chapterId}/leaders/{uid}
-chapters/{chapterId}/documents/{documentId}
-chapters/{chapterId}/notices/{noticeId}
-chapters/{chapterId}/noticeReceipts/{noticeId}__{uid}
-chapters/{chapterId}/adviserCheckins/{checkinId}
-```
-
-Account activation records use:
-
-```text
-chapterInvitations/{sha256ActivationCode}
-chapterMemberships/{chapterId}__{firebaseUid}
+chapterSubmissions/{submissionId}/attachments/{attachmentId}
+chapter-submissions/{chapterId}/{submissionId}/{uid}/{fileName}
 ```
 
 ## Role values
@@ -212,7 +168,20 @@ adviser
 chapterUser
 ```
 
-Portal access requires `accountStatus = active`. Director, Adviser, and future `chapterUser` accounts must also have a verified Firebase email before protected chapter data is available.
+Director, Adviser, and chapter-user accounts require verified Firebase email before private chapter data is available.
+
+## Documentation
+
+- [`PHASE-1-NOTES.md`](PHASE-1-NOTES.md)
+- [`PHASE-2-NOTES.md`](PHASE-2-NOTES.md)
+- [`PHASE-3-NOTES.md`](PHASE-3-NOTES.md)
+- [`PHASE-4-NOTES.md`](PHASE-4-NOTES.md)
+- [`PHASE-5-NOTES.md`](PHASE-5-NOTES.md)
+- [`docs/REGISTRY-DATA-MODEL.md`](docs/REGISTRY-DATA-MODEL.md)
+- [`docs/ACCOUNT-ACTIVATION-DATA-MODEL.md`](docs/ACCOUNT-ACTIVATION-DATA-MODEL.md)
+- [`docs/CHAPTER-PORTAL-DATA-MODEL.md`](docs/CHAPTER-PORTAL-DATA-MODEL.md)
+- [`docs/SUBMISSION-WORKFLOW-DATA-MODEL.md`](docs/SUBMISSION-WORKFLOW-DATA-MODEL.md)
+- [`docs/PHASE-5-SETUP.md`](docs/PHASE-5-SETUP.md)
 
 ## Local testing
 
@@ -220,14 +189,7 @@ Portal access requires `accountStatus = active`. Director, Adviser, and future `
 python -m http.server 8080
 ```
 
-Then open `http://localhost:8080`. Add `localhost` to Firebase Authentication authorized domains when required.
-
-## Release notes
-
-- [`PHASE-1-NOTES.md`](PHASE-1-NOTES.md)
-- [`PHASE-2-NOTES.md`](PHASE-2-NOTES.md)
-- [`PHASE-3-NOTES.md`](PHASE-3-NOTES.md)
-- [`PHASE-4-NOTES.md`](PHASE-4-NOTES.md)
+Then open `http://localhost:8080` and add `localhost` to Firebase Authentication authorized domains if necessary.
 
 ## Phase roadmap
 
@@ -235,7 +197,7 @@ Then open `http://localhost:8080`. Add `localhost` to Firebase Authentication au
 2. Public chapter registry and verification — complete
 3. Account invitations and activation — complete
 4. Director and Adviser portals — complete
-5. Reports, renewals, and operational workflows
+5. Reports, renewals, and operational workflows — complete
 6. Internal support chat and notices
 7. Full administrative management
 8. Security review, testing, documentation, and production finalization
