@@ -51,6 +51,10 @@ service cloud.firestore {
       return hasRole(['owner', 'chapterAdmin', 'complianceAdmin']);
     }
 
+    function canReviewSubmissions() {
+      return hasRole(['owner', 'chapterAdmin', 'complianceAdmin']);
+    }
+
     function canReadChapterOperations() {
       return hasRole(['owner', 'chapterAdmin', 'complianceAdmin', 'supportAgent']);
     }
@@ -252,6 +256,217 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    function submissionTypeAllowed(chapterId, type) {
+      return (type == 'annual_renewal' && hasChapterMembershipRole(chapterId, ['director']))
+        || (type == 'adviser_confirmation' && hasChapterMembershipRole(chapterId, ['adviser']))
+        || (type in [
+          'meeting_report', 'periodic_report', 'event_proposal',
+          'leadership_change', 'institution_change', 'inactivity_request',
+          'document_submission'
+        ] && hasChapterMembershipRole(chapterId, ['director', 'adviser']));
+    }
+
+    function validSubmissionContent(data) {
+      return data.title is string
+        && data.title.size() >= 2
+        && data.title.size() <= 180
+        && data.reportingPeriod is string
+        && data.reportingPeriod.size() <= 120
+        && data.meetingDate is string
+        && data.meetingDate.size() <= 40
+        && data.eventDate is string
+        && data.eventDate.size() <= 40
+        && data.eventLocation is string
+        && data.eventLocation.size() <= 180
+        && data.requestedStartDate is string
+        && data.requestedStartDate.size() <= 40
+        && data.requestedEndDate is string
+        && data.requestedEndDate.size() <= 40
+        && data.currentValue is string
+        && data.currentValue.size() <= 1000
+        && data.proposedValue is string
+        && data.proposedValue.size() <= 1000
+        && data.requestedChange is string
+        && data.requestedChange.size() <= 160
+        && data.summary is string
+        && data.summary.size() >= 2
+        && data.summary.size() <= 1500
+        && data.details is string
+        && data.details.size() >= 2
+        && data.details.size() <= 5000
+        && data.nextSteps is string
+        && data.nextSteps.size() <= 2500
+        && data.supervisionPlan is string
+        && data.supervisionPlan.size() <= 2500
+        && data.transportationPlan is string
+        && data.transportationPlan.size() <= 1800
+        && data.budgetNotes is string
+        && data.budgetNotes.size() <= 1800
+        && data.attendance is number
+        && data.attendance >= 0
+        && data.attendance <= 100000
+        && data.volunteerCount is number
+        && data.volunteerCount >= 0
+        && data.volunteerCount <= 100000
+        && data.volunteerHours is number
+        && data.volunteerHours >= 0
+        && data.volunteerHours <= 100000
+        && data.institutionalApprovalConfirmed is bool
+        && data.leadershipRosterConfirmed is bool
+        && data.supervisionConfirmed is bool
+        && data.attachmentCount is int
+        && data.attachmentCount >= 0
+        && data.attachmentCount <= 5;
+    }
+
+    function validNewSubmission() {
+      let chapterId = request.resource.data.chapterId;
+      return hasChapterMembership(chapterId)
+        && submissionTypeAllowed(chapterId, request.resource.data.type)
+        && request.resource.data.keys().hasAll([
+          'chapterId', 'chapterName', 'type', 'title', 'status',
+          'submittedByUid', 'submittedByName', 'submittedByRole',
+          'reportingPeriod', 'meetingDate', 'eventDate', 'eventLocation',
+          'requestedStartDate', 'requestedEndDate', 'currentValue',
+          'proposedValue', 'requestedChange', 'summary', 'details',
+          'nextSteps', 'supervisionPlan', 'transportationPlan', 'budgetNotes',
+          'attendance', 'volunteerCount', 'volunteerHours',
+          'institutionalApprovalConfirmed', 'leadershipRosterConfirmed',
+          'supervisionConfirmed', 'attachmentCount', 'version',
+          'submittedAt', 'reviewNote', 'reviewedByUid', 'reviewedByName',
+          'reviewedAt', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'chapterId', 'chapterName', 'type', 'title', 'status',
+          'submittedByUid', 'submittedByName', 'submittedByRole',
+          'reportingPeriod', 'meetingDate', 'eventDate', 'eventLocation',
+          'requestedStartDate', 'requestedEndDate', 'currentValue',
+          'proposedValue', 'requestedChange', 'summary', 'details',
+          'nextSteps', 'supervisionPlan', 'transportationPlan', 'budgetNotes',
+          'attendance', 'volunteerCount', 'volunteerHours',
+          'institutionalApprovalConfirmed', 'leadershipRosterConfirmed',
+          'supervisionConfirmed', 'attachmentCount', 'version',
+          'submittedAt', 'reviewNote', 'reviewedByUid', 'reviewedByName',
+          'reviewedAt', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.chapterId is string
+        && request.resource.data.chapterId.size() == 18
+        && request.resource.data.chapterName is string
+        && request.resource.data.chapterName.size() >= 2
+        && request.resource.data.chapterName.size() <= 180
+        && request.resource.data.submittedByUid == request.auth.uid
+        && request.resource.data.submittedByName is string
+        && request.resource.data.submittedByName.size() >= 2
+        && request.resource.data.submittedByName.size() <= 100
+        && request.resource.data.submittedByRole == chapterMembership(chapterId).role
+        && request.resource.data.status == 'draft'
+        && request.resource.data.attachmentCount == 0
+        && request.resource.data.version == 1
+        && request.resource.data.submittedAt == null
+        && request.resource.data.reviewNote == ''
+        && request.resource.data.reviewedByUid == ''
+        && request.resource.data.reviewedByName == ''
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && validSubmissionContent(request.resource.data);
+    }
+
+    function validMemberSubmissionEdit() {
+      let chapterId = resource.data.chapterId;
+      return hasChapterMembership(chapterId)
+        && resource.data.submittedByUid == request.auth.uid
+        && resource.data.status in ['draft', 'changes_requested']
+        && request.resource.data.chapterId == resource.data.chapterId
+        && request.resource.data.chapterName == resource.data.chapterName
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.submittedByUid == resource.data.submittedByUid
+        && request.resource.data.submittedByName == resource.data.submittedByName
+        && request.resource.data.submittedByRole == resource.data.submittedByRole
+        && request.resource.data.version == resource.data.version
+        && request.resource.data.reviewNote == resource.data.reviewNote
+        && request.resource.data.reviewedByUid == resource.data.reviewedByUid
+        && request.resource.data.reviewedByName == resource.data.reviewedByName
+        && request.resource.data.reviewedAt == resource.data.reviewedAt
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title', 'status', 'reportingPeriod', 'meetingDate', 'eventDate',
+          'eventLocation', 'requestedStartDate', 'requestedEndDate',
+          'currentValue', 'proposedValue', 'requestedChange', 'summary',
+          'details', 'nextSteps', 'supervisionPlan', 'transportationPlan',
+          'budgetNotes', 'attendance', 'volunteerCount', 'volunteerHours',
+          'institutionalApprovalConfirmed', 'leadershipRosterConfirmed',
+          'supervisionConfirmed', 'attachmentCount', 'submittedAt', 'updatedAt'
+        ])
+        && request.resource.data.status in ['draft', 'submitted']
+        && ((request.resource.data.status == 'draft' && request.resource.data.submittedAt == null)
+          || (request.resource.data.status == 'submitted' && request.resource.data.submittedAt == request.time))
+        && request.resource.data.updatedAt == request.time
+        && validSubmissionContent(request.resource.data);
+    }
+
+    function validMemberWithdrawal() {
+      return hasChapterMembership(resource.data.chapterId)
+        && resource.data.submittedByUid == request.auth.uid
+        && resource.data.status in ['submitted', 'under_review', 'changes_requested']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.status == 'withdrawn'
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validAdministrativeReview() {
+      return canReviewSubmissions()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'reviewNote', 'reviewedByUid', 'reviewedByName',
+          'reviewedAt', 'updatedAt'
+        ])
+        && request.resource.data.status in [
+          'submitted', 'under_review', 'changes_requested', 'approved', 'denied'
+        ]
+        && request.resource.data.reviewNote is string
+        && request.resource.data.reviewNote.size() <= 3000
+        && request.resource.data.reviewedByUid == request.auth.uid
+        && request.resource.data.reviewedByName is string
+        && request.resource.data.reviewedByName.size() >= 2
+        && request.resource.data.reviewedByName.size() <= 100
+        && request.resource.data.reviewedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validAttachment(submissionId) {
+      let submission = get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data;
+      return hasChapterMembership(request.resource.data.chapterId)
+        && submission.submittedByUid == request.auth.uid
+        && submission.chapterId == request.resource.data.chapterId
+        && submission.status in ['draft', 'changes_requested']
+        && request.resource.data.keys().hasAll([
+          'chapterId', 'submissionId', 'storagePath', 'downloadUrl',
+          'fileName', 'contentType', 'size', 'uploadedByUid', 'uploadedAt'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'chapterId', 'submissionId', 'storagePath', 'downloadUrl',
+          'fileName', 'contentType', 'size', 'uploadedByUid', 'uploadedAt'
+        ])
+        && request.resource.data.submissionId == submissionId
+        && request.resource.data.uploadedByUid == request.auth.uid
+        && request.resource.data.fileName is string
+        && request.resource.data.fileName.size() >= 1
+        && request.resource.data.fileName.size() <= 240
+        && request.resource.data.contentType in [
+          'application/pdf', 'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'image/png', 'image/jpeg'
+        ]
+        && request.resource.data.size is int
+        && request.resource.data.size > 0
+        && request.resource.data.size <= 10485760
+        && request.resource.data.storagePath is string
+        && request.resource.data.storagePath.size() <= 600
+        && request.resource.data.downloadUrl is string
+        && request.resource.data.downloadUrl.size() <= 2000
+        && request.resource.data.uploadedAt == request.time;
+    }
+
     match /systemUsers/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow read: if isAdministrativeStaff();
@@ -368,6 +583,26 @@ service cloud.firestore {
         allow create: if validAdviserCheckin(chapterId);
         allow update: if canManageChapterWorkspaces();
         allow delete: if isOwner();
+      }
+    }
+
+    match /chapterSubmissions/{submissionId} {
+      allow read: if canReadChapterOperations() || hasChapterMembership(resource.data.chapterId);
+      allow create: if validNewSubmission();
+      allow update: if validMemberSubmissionEdit()
+        || validMemberWithdrawal()
+        || validAdministrativeReview();
+      allow delete: if isOwner();
+
+      match /attachments/{attachmentId} {
+        allow read: if canReadChapterOperations()
+          || hasChapterMembership(get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data.chapterId);
+        allow create: if validAttachment(submissionId);
+        allow update: if false;
+        allow delete: if canReviewSubmissions()
+          || (signedIn()
+            && get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data.submittedByUid == request.auth.uid
+            && get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data.status in ['draft', 'changes_requested']);
       }
     }
 
