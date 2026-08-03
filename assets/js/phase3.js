@@ -32,7 +32,7 @@ const PHASE3_ROUTES = new Set([
 ]);
 const ADMIN_ROLES = new Set(["owner", "chapterAdmin"]);
 const CHAPTER_ROLES = new Set(["director", "adviser", "chapterUser"]);
-const CHAPTER_ID_PATTERN = /^TPP-CH-\d{4}-\d{6}$/;
+const CHAPTER_ID_PATTERN = /^TPP-CH-[A-Z0-9]{1,32}$/;
 const INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const INVITE_CODE_GROUPS = 4;
 const INVITE_CODE_GROUP_LENGTH = 5;
@@ -523,7 +523,7 @@ function adminInvitationsPage() {
         <form class="form" id="invitation-create-form" novalidate>
           <div class="field">
             <label for="invite-chapter-id">Permanent Chapter ID</label>
-            <input class="input" id="invite-chapter-id" name="chapterId" type="text" maxlength="22" placeholder="TPP-CH-2026-000001" required>
+            <input class="input" id="invite-chapter-id" name="chapterId" type="text" maxlength="39" placeholder="TPP-CH-A1B2C3" required>
           </div>
           <div class="form-row">
             <div class="field">
@@ -797,7 +797,7 @@ async function handleCreateInvitation(form) {
   const expirationDays = Number(form.expirationDays.value);
   const note = form.note.value.trim();
 
-  if (!CHAPTER_ID_PATTERN.test(chapterId)) return setAlert("invitation-alert", "warning", "Invalid Chapter ID", "Use the permanent format TPP-CH-YYYY-######.");
+  if (!CHAPTER_ID_PATTERN.test(chapterId)) return setAlert("invitation-alert", "warning", "Invalid Chapter ID", "Use TPP-CH- followed by letters and/or numbers, such as TPP-CH-A1B2C3.");
   if (displayName.length < 2 || !email.includes("@")) return setAlert("invitation-alert", "warning", "Recipient information required", "Enter the leader's name and a valid email address.");
   if (!roleLabels[role]) return setAlert("invitation-alert", "warning", "Role required", "Choose Chapter Director or Chapter Adviser.");
 

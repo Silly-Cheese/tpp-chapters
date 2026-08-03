@@ -71,6 +71,13 @@ service cloud.firestore {
       return chapterId + '__' + uid;
     }
 
+    function validChapterId(chapterId) {
+      return chapterId is string
+        && chapterId.size() >= 8
+        && chapterId.size() <= 39
+        && chapterId.matches('^TPP-CH-[A-Z0-9]{1,32}$');
+    }
+
     function hasChapterMembership(chapterId) {
       return signedIn()
         && request.auth.token.email_verified == true
@@ -353,8 +360,7 @@ service cloud.firestore {
           'submittedAt', 'reviewNote', 'reviewedByUid', 'reviewedByName',
           'reviewedAt', 'createdAt', 'updatedAt'
         ])
-        && request.resource.data.chapterId is string
-        && request.resource.data.chapterId.size() == 18
+        && validChapterId(request.resource.data.chapterId)
         && request.resource.data.chapterName is string
         && request.resource.data.chapterName.size() >= 2
         && request.resource.data.chapterName.size() <= 180
@@ -511,8 +517,7 @@ service cloud.firestore {
           'lastMessageByName', 'lastMessageSenderType', 'messageCount',
           'createdAt', 'updatedAt'
         ])
-        && chapterId is string
-        && chapterId.size() == 18
+        && validChapterId(chapterId)
         && request.resource.data.chapterName is string
         && request.resource.data.chapterName.size() >= 2
         && request.resource.data.chapterName.size() <= 180
@@ -751,8 +756,7 @@ service cloud.firestore {
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() >= 2
         && request.resource.data.displayName.size() <= 80
-        && request.resource.data.chapterId is string
-        && request.resource.data.chapterId.size() == 18
+        && validChapterId(request.resource.data.chapterId)
         && request.resource.data.chapterName is string
         && request.resource.data.chapterName.size() >= 2
         && request.resource.data.chapterName.size() <= 180

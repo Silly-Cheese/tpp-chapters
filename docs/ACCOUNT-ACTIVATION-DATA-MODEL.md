@@ -17,7 +17,7 @@ The document ID is the lowercase hexadecimal SHA-256 hash of the normalized acti
   codeHint: "A9K2Q",
   email: "director@example.org",
   displayName: "Example Director",
-  chapterId: "TPP-CH-2026-000001",
+  chapterId: "TPP-CH-A1B2C3",
   chapterName: "The Prayer Project at Example School",
   role: "director", // director | adviser
   status: "pending", // pending | claimed | revoked
@@ -41,7 +41,7 @@ A pending invitation whose `expiresAt` has passed is treated as expired by the i
 The document ID combines the permanent Chapter ID and Firebase UID:
 
 ```text
-TPP-CH-2026-000001__FIREBASE_UID
+TPP-CH-A1B2C3__FIREBASE_UID
 ```
 
 ```javascript
@@ -49,7 +49,7 @@ TPP-CH-2026-000001__FIREBASE_UID
   uid: "recipient-firebase-uid",
   email: "director@example.org",
   displayName: "Example Director",
-  chapterId: "TPP-CH-2026-000001",
+  chapterId: "TPP-CH-A1B2C3",
   chapterName: "The Prayer Project at Example School",
   role: "director", // director | adviser
   status: "active",
@@ -71,7 +71,7 @@ Phase 4 will use these membership documents as the source of chapter-specific Di
   email: "director@example.org",
   systemRole: "director",
   accountStatus: "active",
-  primaryChapterId: "TPP-CH-2026-000001",
+  primaryChapterId: "TPP-CH-A1B2C3",
   primaryChapterRole: "director",
   activationInvitationId: "64-character-sha256-hex",
   createdAt: Timestamp,
