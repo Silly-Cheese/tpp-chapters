@@ -1,0 +1,55 @@
+name: Apply mobile drawer and member roster
+
+on:
+  push:
+    branches:
+      - fix/mobile-members-roster
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/mobile-members-roster
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Apply Firestore rules and portal corrections
+        run: python3 scripts/apply_member_roster_rules.py
+
+      - name: Validate implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            echo "Checking $file"
+            node --input-type=module --check < "$file"
+          done < <(find assets/js -type f -name '*.js' -print0 | sort -z)
+          python3 scripts/validate_repository.py
+          python3 scripts/validate_chapter_id_format.py
+          python3 scripts/validate_portal_routing.py
+          python3 scripts/validate_workspace_invitation_activation.py
+          python3 scripts/validate_create_chapter_portal.py
+          python3 scripts/validate_no_email_verification.py
+          python3 scripts/validate_chapter_portal_v2.py
+          python3 scripts/validate_mobile_members_roster.py
+
+      - name: Commit production changes
+        run: |
+          rm -f .github/workflows/apply-mobile-members-roster.yml
+          rm -f scripts/apply_member_roster_rules.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix mobile chapter portal and add member roster"
+          git push origin HEAD:fix/mobile-members-roster
