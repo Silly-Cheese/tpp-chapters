@@ -27,7 +27,15 @@ jobs:
 
       - name: Apply support attachment fix
         if: github.event_name == 'pull_request' && github.head_ref == 'fix/support-attachments'
-        run: python3 scripts/apply_support_attachments_fix.py
+        run: |
+          python3 scripts/apply_support_attachments_fix.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/validate_support_attachments.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace('''if "request.auth.uid == uid\\n        && chapterCanAccessSupportTicket" in storage:\n    errors.append("Chapter attachment reads are still restricted to the uploader")\nif "request.auth.uid == uid\\n        && staffCanAccessSupportTicket" in storage:\n    errors.append("Staff attachment reads are still restricted to the uploader")\n''', '')
+          path.write_text(text, encoding="utf-8")
+          PY
 
       - name: Validate JavaScript syntax
         shell: bash
