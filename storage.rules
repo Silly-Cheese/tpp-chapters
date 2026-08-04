@@ -93,9 +93,8 @@ service firebase.storage {
     // Chapter-authored support files use exactly two Firestore lookups:
     // the chapter membership and the parent support ticket.
     match /support-attachments/chapter/{chapterId}/{ticketId}/{messageId}/{uid}/{fileName} {
-      allow read: if signedIn()
-        && request.auth.uid == uid
-        && chapterCanAccessSupportTicket(chapterId, ticketId);
+      allow read: if chapterCanAccessSupportTicket(chapterId, ticketId)
+        || staffCanAccessSupportTicket(chapterId, ticketId);
 
       allow create, update: if signedIn()
         && request.auth.uid == uid
@@ -110,9 +109,8 @@ service firebase.storage {
     // Staff-authored support files use exactly two Firestore lookups:
     // the active staff profile and the parent support ticket.
     match /support-attachments/staff/{chapterId}/{ticketId}/{messageId}/{uid}/{fileName} {
-      allow read: if signedIn()
-        && request.auth.uid == uid
-        && staffCanAccessSupportTicket(chapterId, ticketId);
+      allow read: if chapterCanAccessSupportTicket(chapterId, ticketId)
+        || staffCanAccessSupportTicket(chapterId, ticketId);
 
       allow create, update: if signedIn()
         && request.auth.uid == uid
