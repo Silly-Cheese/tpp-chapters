@@ -7,7 +7,7 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -16,11 +16,18 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+
+      - name: Apply support attachment fix
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/support-attachments'
+        run: python3 scripts/apply_support_attachments_fix.py
 
       - name: Validate JavaScript syntax
         shell: bash
@@ -57,3 +64,16 @@ jobs:
 
       - name: Validate support center permissions
         run: python3 scripts/validate_support_center_permissions.py
+
+      - name: Validate support attachments
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/support-attachments'
+        run: python3 scripts/validate_support_attachments.py
+
+      - name: Commit generated support attachment fix
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/support-attachments'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/js/phase6.js storage.rules index.html scripts/validate_*.py
+          git commit -m "Fix support attachment uploads and access" || exit 0
+          git push origin HEAD:fix/support-attachments
