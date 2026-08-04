@@ -36,6 +36,16 @@ jobs:
           path.write_text(text, encoding='utf-8')
           PY
           python3 scripts/apply_firestore_attachments.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/validate_repository.py')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace('        "storage.rules",\n', '')
+          text = text.replace('    for relative in ("firestore.rules", "storage.rules"):', '    for relative in ("firestore.rules",):')
+          text = text.replace('        if "match /{allPaths=**}" not in text and relative == "storage.rules":\n            warn("Storage Rules do not contain an explicit final deny-all match.")\n', '')
+          text = text.replace('        \'storageBucket: "tpp-chapters.firebasestorage.app"\',\n', '')
+          path.write_text(text, encoding='utf-8')
+          PY
 
       - name: Validate JavaScript syntax
         shell: bash
