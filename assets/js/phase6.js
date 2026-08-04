@@ -52,6 +52,14 @@ const ALLOWED_TYPES = new Set([
   "image/png",
   "image/jpeg"
 ]);
+const FILE_TYPE_BY_EXTENSION = Object.freeze({
+  pdf: "application/pdf",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg"
+});
 
 const CATEGORY_LABELS = Object.freeze({
   general_assistance: "General Assistance",
@@ -239,14 +247,40 @@ function safeFileName(name) {
   return String(name).replace(/[^a-zA-Z0-9._-]/g, "_").slice(-140);
 }
 
+function normalizedFileType(file) {
+  const browserType = String(file?.type || "").trim().toLowerCase();
+  if (ALLOWED_TYPES.has(browserType)) return browserType;
+  const extension = String(file?.name || "").split(".").pop()?.toLowerCase() || "";
+  return FILE_TYPE_BY_EXTENSION[extension] || "";
+}
+
 function validateFiles(files) {
   const items = Array.from(files || []);
   if (items.length > FILE_LIMIT) throw new Error(`Attach no more than ${FILE_LIMIT} files.`);
-  for (const file of items) {
-    if (!ALLOWED_TYPES.has(file.type)) throw new Error(`${file.name} is not an approved file type.`);
+  return items.map((file) => {
+    const contentType = normalizedFileType(file);
+    if (!contentType) throw new Error(`${file.name} is not an approved PDF, Word, PNG, or JPEG file.`);
+    if (!Number.isFinite(file.size) || file.size <= 0) throw new Error(`${file.name} is empty and cannot be uploaded.`);
     if (file.size > FILE_SIZE_LIMIT) throw new Error(`${file.name} is larger than 10 MB.`);
+    return { file, contentType };
+  });
+}
+
+function attachmentErrorMessage(error, fileName = "The attachment") {
+  const code = String(error?.code || "");
+  const details = String(error?.message || error?.serverResponse || "");
+  if (code === "storage/quota-exceeded" || /402|billing|blaze|spark|UserProjectAccountProblem/i.test(details)) {
+    return `${fileName} could not be uploaded because Cloud Storage for Firebase requires the Blaze plan and an active billing account.`;
   }
-  return items;
+  if (code === "storage/bucket-not-found" || /bucket.+not found/i.test(details)) {
+    return `${fileName} could not be uploaded because the Firebase Storage bucket has not been created.`;
+  }
+  if (code === "storage/unauthorized" || code === "permission-denied") {
+    return `${fileName} could not be uploaded because the live Storage Rules do not authorize this chapter account.`;
+  }
+  if (code === "storage/canceled") return `${fileName} upload was canceled.`;
+  if (code === "storage/retry-limit-exceeded") return `${fileName} could not be uploaded after repeated network retries.`;
+  return `${fileName} could not be uploaded. ${details || "Firebase Storage rejected the file."}`;
 }
 
 function cleanupListeners() {
@@ -636,29 +670,52 @@ function adminCommunicationsPage() {
 
 async function uploadMessageAttachments(ticket, messageId, files) {
   const uploaded = [];
-  for (const file of files) {
+  for (const item of files) {
+    const file = item.file || item;
+    const contentType = item.contentType || normalizedFileType(file);
     const fileName = `${crypto.randomUUID()}-${safeFileName(file.name)}`;
     const uploaderType = SUPPORT_STAFF_ROLES.has(state.profile?.systemRole) ? "staff" : "chapter";
     const path = `support-attachments/${uploaderType}/${ticket.chapterId}/${ticket.id}/${messageId}/${state.user.uid}/${fileName}`;
     const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file, { contentType: file.type, customMetadata: { ticketId: ticket.id, chapterId: ticket.chapterId, messageId, uploadedByUid: state.user.uid } });
-    const downloadUrl = await getDownloadURL(storageRef);
-    const attachmentRef = doc(collection(db, "supportTickets", ticket.id, "messages", messageId, "attachments"));
-    await setDoc(attachmentRef, {
-      ticketId: ticket.id,
-      chapterId: ticket.chapterId,
-      messageId,
-      uploadedByUid: state.user.uid,
-      fileName: file.name,
-      storagePath: path,
-      downloadUrl,
-      contentType: file.type,
-      size: file.size,
-      createdAt: serverTimestamp()
-    });
-    uploaded.push(attachmentRef.id);
+    try {
+      await uploadBytes(storageRef, file, {
+        contentType,
+        customMetadata: {
+          ticketId: ticket.id,
+          chapterId: ticket.chapterId,
+          messageId,
+          uploadedByUid: state.user.uid,
+          originalFileName: safeFileName(file.name)
+        }
+      });
+      const downloadUrl = await getDownloadURL(storageRef);
+      const attachmentRef = doc(collection(db, "supportTickets", ticket.id, "messages", messageId, "attachments"));
+      await setDoc(attachmentRef, {
+        ticketId: ticket.id,
+        chapterId: ticket.chapterId,
+        messageId,
+        uploadedByUid: state.user.uid,
+        fileName: file.name,
+        storagePath: path,
+        downloadUrl,
+        contentType,
+        size: file.size,
+        createdAt: serverTimestamp()
+      });
+      uploaded.push(attachmentRef.id);
+    } catch (error) {
+      const attachmentError = new Error(attachmentErrorMessage(error, file.name));
+      attachmentError.code = error?.code || "attachment/upload-failed";
+      attachmentError.cause = error;
+      throw attachmentError;
+    }
   }
-  if (uploaded.length) await updateDoc(doc(db, "supportTickets", ticket.id, "messages", messageId), { hasAttachments: true, attachmentCount: uploaded.length });
+  if (uploaded.length) {
+    await updateDoc(doc(db, "supportTickets", ticket.id, "messages", messageId), {
+      hasAttachments: true,
+      attachmentCount: uploaded.length
+    });
+  }
 }
 
 async function createTicket(form) {
@@ -676,8 +733,11 @@ async function createTicket(form) {
   try { files = validateFiles(form.files.files); } catch (error) { return setAlert("p6-form-alert", "warning", "Attachment not accepted", error.message); }
   submit.disabled = true;
   submit.textContent = "Creating ticket…";
+  let createdTicketId = "";
+  let ticketCommitted = false;
   try {
     const ticketRef = doc(collection(db, "supportTickets"));
+    createdTicketId = ticketRef.id;
     const messageRef = doc(collection(ticketRef, "messages"));
     const displayName = state.profile?.displayName || state.user.displayName || state.user.email;
     const accessKeys = visibility === "adviser_private"
@@ -730,11 +790,17 @@ async function createTicket(form) {
       updatedAt: serverTimestamp()
     });
     await batch.commit();
+    ticketCommitted = true;
     if (files.length) await uploadMessageAttachments({ id: ticketRef.id, ...ticketData }, messageRef.id, files);
     navigate(`/chapter/support/ticket?id=${encodeURIComponent(ticketRef.id)}`);
   } catch (error) {
     console.error("Unable to create support ticket.", error);
-    setAlert("p6-form-alert", "danger", "Ticket not created", error.message || "Firebase rejected the support request.");
+    if (ticketCommitted && createdTicketId) {
+      setAlert("p6-form-alert", "warning", "Ticket created without its attachment", error.message || "The ticket was saved, but Firebase rejected the file upload.");
+      setTimeout(() => navigate(`/chapter/support/ticket?id=${encodeURIComponent(createdTicketId)}`), 1800);
+    } else {
+      setAlert("p6-form-alert", "danger", "Ticket not created", error.message || "Firebase rejected the support request.");
+    }
   } finally {
     submit.disabled = false;
     submit.innerHTML = `${icons.send} Create ticket`;
@@ -751,6 +817,7 @@ async function sendMessage(form) {
   const button = form.querySelector("button[type='submit']");
   button.disabled = true;
   button.textContent = "Sending…";
+  let messageCommitted = false;
   try {
     const messageRef = doc(collection(db, "supportTickets", ticket.id, "messages"));
     const name = state.profile?.displayName || state.user.displayName || state.user.email;
@@ -780,11 +847,12 @@ async function sendMessage(form) {
       updatedAt: serverTimestamp()
     });
     await batch.commit();
+    messageCommitted = true;
     if (files.length) await uploadMessageAttachments(ticket, messageRef.id, files);
     form.reset();
   } catch (error) {
     console.error("Unable to send support message.", error);
-    toast("Message not sent", error.message || "Firebase rejected the reply.", "danger");
+    toast(messageCommitted ? "Message sent without its attachment" : "Message not sent", error.message || "Firebase rejected the reply.", messageCommitted ? "warning" : "danger");
   } finally {
     button.disabled = false;
     button.innerHTML = `${icons.send} Send reply`;
