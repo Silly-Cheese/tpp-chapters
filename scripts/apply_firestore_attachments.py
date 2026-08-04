@@ -35,7 +35,8 @@ save(config_path, json.dumps(config, indent=2) + "\n")
 
 # Phase 5 submissions.
 p5_path = Path("assets/js/phase5.js")
-p5 = p5_path.read_text(encoding="utf-8")np5_storage_import = '''import {
+p5 = p5_path.read_text(encoding="utf-8")
+p5_storage_import = '''import {
   deleteObject,
   getDownloadURL,
   ref,

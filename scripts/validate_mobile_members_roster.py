@@ -43,11 +43,11 @@ for marker in (
         errors.append(f"Firestore member roster rules are missing: {marker}")
 
 build = re.search(r'<meta name="tpp-build" content="([^"]+)">', index)
-if not build or build.group(1) != "20260803.11":
-    errors.append("Production build must be 20260803.11")
+if not build or build.group(1) != "20260803.12":
+    errors.append("Production build must be 20260803.12")
 for asset in (
-    "assets/chapter-portal-mobile-members.css?v=20260803.11",
-    "assets/js/chapter-portal-mobile-members.js?v=20260803.11",
+    "assets/chapter-portal-mobile-members.css?v=20260803.12",
+    "assets/js/chapter-portal-mobile-members.js?v=20260803.12",
 ):
     if asset not in index:
         errors.append(f"Production entry point is missing: {asset}")

@@ -516,20 +516,23 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
-    function validAttachment(submissionId) {
+    function validAttachment(submissionId, attachmentId) {
       let submission = get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data;
       return hasChapterMembership(request.resource.data.chapterId)
         && submission.submittedByUid == request.auth.uid
         && submission.chapterId == request.resource.data.chapterId
         && submission.status in ['draft', 'changes_requested']
         && request.resource.data.keys().hasAll([
-          'chapterId', 'submissionId', 'storagePath', 'downloadUrl',
-          'fileName', 'contentType', 'size', 'uploadedByUid', 'uploadedAt'
+          'attachmentId', 'chapterId', 'submissionId', 'fileName',
+          'contentType', 'size', 'chunkCount', 'storageMode',
+          'uploadedByUid', 'uploadedAt'
         ])
         && request.resource.data.keys().hasOnly([
-          'chapterId', 'submissionId', 'storagePath', 'downloadUrl',
-          'fileName', 'contentType', 'size', 'uploadedByUid', 'uploadedAt'
+          'attachmentId', 'chapterId', 'submissionId', 'fileName',
+          'contentType', 'size', 'chunkCount', 'storageMode',
+          'uploadedByUid', 'uploadedAt'
         ])
+        && request.resource.data.attachmentId == attachmentId
         && request.resource.data.submissionId == submissionId
         && request.resource.data.uploadedByUid == request.auth.uid
         && request.resource.data.fileName is string
@@ -542,12 +545,32 @@ service cloud.firestore {
         ]
         && request.resource.data.size is int
         && request.resource.data.size > 0
-        && request.resource.data.size <= 10485760
-        && request.resource.data.storagePath is string
-        && request.resource.data.storagePath.size() <= 600
-        && request.resource.data.downloadUrl is string
-        && request.resource.data.downloadUrl.size() <= 2000
+        && request.resource.data.size <= 2097152
+        && request.resource.data.chunkCount is int
+        && request.resource.data.chunkCount >= 1
+        && request.resource.data.chunkCount <= 7
+        && request.resource.data.storageMode == 'firestore_chunks'
         && request.resource.data.uploadedAt == request.time;
+    }
+
+    function validSubmissionAttachmentChunk(submissionId, attachmentId) {
+      let submission = get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data;
+      let attachment = getAfter(/databases/$(database)/documents/chapterSubmissions/$(submissionId)/attachments/$(attachmentId)).data;
+      return hasChapterMembership(submission.chapterId)
+        && submission.submittedByUid == request.auth.uid
+        && submission.status in ['draft', 'changes_requested']
+        && attachment.uploadedByUid == request.auth.uid
+        && attachment.storageMode == 'firestore_chunks'
+        && request.resource.data.keys().hasAll(['attachmentId', 'index', 'data', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['attachmentId', 'index', 'data', 'createdAt'])
+        && request.resource.data.attachmentId == attachmentId
+        && request.resource.data.index is int
+        && request.resource.data.index >= 0
+        && request.resource.data.index < attachment.chunkCount
+        && request.resource.data.data is string
+        && request.resource.data.data.size() > 0
+        && request.resource.data.data.size() <= 450000
+        && request.resource.data.createdAt == request.time;
     }
 
     function supportTicket(ticketId) {
@@ -703,19 +726,22 @@ service cloud.firestore {
         && request.resource.data.attachmentCount <= 5;
     }
 
-    function validSupportAttachment(ticketId, messageId) {
+    function validSupportAttachment(ticketId, messageId, attachmentId) {
       let ticket = supportTicket(ticketId);
       let message = get(/databases/$(database)/documents/supportTickets/$(ticketId)/messages/$(messageId)).data;
       return canAccessSupportTicketData(ticket)
         && (message.authorUid == request.auth.uid || canManageSupport())
         && request.resource.data.keys().hasAll([
-          'ticketId', 'chapterId', 'messageId', 'uploadedByUid', 'fileName',
-          'storagePath', 'downloadUrl', 'contentType', 'size', 'createdAt'
+          'attachmentId', 'ticketId', 'chapterId', 'messageId',
+          'uploadedByUid', 'fileName', 'contentType', 'size',
+          'chunkCount', 'storageMode', 'uploadedAt'
         ])
         && request.resource.data.keys().hasOnly([
-          'ticketId', 'chapterId', 'messageId', 'uploadedByUid', 'fileName',
-          'storagePath', 'downloadUrl', 'contentType', 'size', 'createdAt'
+          'attachmentId', 'ticketId', 'chapterId', 'messageId',
+          'uploadedByUid', 'fileName', 'contentType', 'size',
+          'chunkCount', 'storageMode', 'uploadedAt'
         ])
+        && request.resource.data.attachmentId == attachmentId
         && request.resource.data.ticketId == ticketId
         && request.resource.data.chapterId == ticket.chapterId
         && request.resource.data.messageId == messageId
@@ -723,10 +749,6 @@ service cloud.firestore {
         && request.resource.data.fileName is string
         && request.resource.data.fileName.size() >= 1
         && request.resource.data.fileName.size() <= 240
-        && request.resource.data.storagePath is string
-        && request.resource.data.storagePath.size() <= 700
-        && request.resource.data.downloadUrl is string
-        && request.resource.data.downloadUrl.size() <= 2000
         && request.resource.data.contentType in [
           'application/pdf', 'application/msword',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -734,7 +756,29 @@ service cloud.firestore {
         ]
         && request.resource.data.size is int
         && request.resource.data.size > 0
-        && request.resource.data.size <= 10485760
+        && request.resource.data.size <= 2097152
+        && request.resource.data.chunkCount is int
+        && request.resource.data.chunkCount >= 1
+        && request.resource.data.chunkCount <= 7
+        && request.resource.data.storageMode == 'firestore_chunks'
+        && request.resource.data.uploadedAt == request.time;
+    }
+
+    function validSupportAttachmentChunk(ticketId, messageId, attachmentId) {
+      let ticket = supportTicket(ticketId);
+      let attachment = getAfter(/databases/$(database)/documents/supportTickets/$(ticketId)/messages/$(messageId)/attachments/$(attachmentId)).data;
+      return canAccessSupportTicketData(ticket)
+        && attachment.uploadedByUid == request.auth.uid
+        && attachment.storageMode == 'firestore_chunks'
+        && request.resource.data.keys().hasAll(['attachmentId', 'index', 'data', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['attachmentId', 'index', 'data', 'createdAt'])
+        && request.resource.data.attachmentId == attachmentId
+        && request.resource.data.index is int
+        && request.resource.data.index >= 0
+        && request.resource.data.index < attachment.chunkCount
+        && request.resource.data.data is string
+        && request.resource.data.data.size() > 0
+        && request.resource.data.data.size() <= 450000
         && request.resource.data.createdAt == request.time;
     }
 
@@ -918,12 +962,23 @@ service cloud.firestore {
       match /attachments/{attachmentId} {
         allow read: if canReadChapterOperations()
           || hasChapterMembership(get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data.chapterId);
-        allow create: if validAttachment(submissionId);
+        allow create: if validAttachment(submissionId, attachmentId);
         allow update: if false;
         allow delete: if canReviewSubmissions()
           || (signedIn()
             && get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data.submittedByUid == request.auth.uid
             && get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data.status in ['draft', 'changes_requested']);
+
+        match /chunks/{chunkId} {
+          allow read: if canReadChapterOperations()
+            || hasChapterMembership(get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data.chapterId);
+          allow create: if validSubmissionAttachmentChunk(submissionId, attachmentId);
+          allow update: if false;
+          allow delete: if canReviewSubmissions()
+            || (signedIn()
+              && get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data.submittedByUid == request.auth.uid
+              && get(/databases/$(database)/documents/chapterSubmissions/$(submissionId)).data.status in ['draft', 'changes_requested']);
+        }
       }
     }
 
@@ -942,9 +997,16 @@ service cloud.firestore {
 
         match /attachments/{attachmentId} {
           allow read: if canAccessSupportTicketData(supportTicket(ticketId));
-          allow create: if validSupportAttachment(ticketId, messageId);
+          allow create: if validSupportAttachment(ticketId, messageId, attachmentId);
           allow update: if false;
           allow delete: if isOwner() || canManageSupport();
+
+          match /chunks/{chunkId} {
+            allow read: if canAccessSupportTicketData(supportTicket(ticketId));
+            allow create: if validSupportAttachmentChunk(ticketId, messageId, attachmentId);
+            allow update: if false;
+            allow delete: if isOwner() || canManageSupport();
+          }
         }
       }
 

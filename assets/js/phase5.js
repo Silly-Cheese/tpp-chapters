@@ -15,13 +15,15 @@ import {
   updateDoc,
   where
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
+import { auth, db, authPersistenceReady } from "./firebase.js";
 import {
-  deleteObject,
-  getDownloadURL,
-  ref,
-  uploadBytes
-} from "https://www.gstatic.com/firebasejs/12.17.0/firebase-storage.js";
-import { auth, db, storage, authPersistenceReady } from "./firebase.js";
+  ATTACHMENT_FILE_LIMIT,
+  ATTACHMENT_MAX_BYTES,
+  deleteFirestoreAttachment,
+  downloadFirestoreAttachment,
+  saveFirestoreAttachment,
+  validateAttachmentFiles
+} from "./firestore-attachments.js";
 
 const app = document.querySelector("#app");
 
@@ -37,15 +39,8 @@ const PHASE5_ROUTES = new Set([...CHAPTER_ROUTES, ...ADMIN_ROUTES]);
 const ADMIN_ROLES = new Set(["owner", "chapterAdmin", "complianceAdmin"]);
 const CHAPTER_ROLES = new Set(["director", "adviser", "chapterUser"]);
 const EDITABLE_STATUSES = new Set(["draft", "changes_requested"]);
-const FILE_LIMIT = 5;
-const FILE_SIZE_LIMIT = 10 * 1024 * 1024;
-const ALLOWED_TYPES = new Set([
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "image/png",
-  "image/jpeg"
-]);
+const FILE_LIMIT = ATTACHMENT_FILE_LIMIT;
+const FILE_SIZE_LIMIT = ATTACHMENT_MAX_BYTES;
 
 const TYPE_CONFIG = Object.freeze({
   meeting_report: {
@@ -450,7 +445,7 @@ function submissionFormPage() {
 
 function attachmentsMarkup(item) {
   if (!item.id || !state.attachments.length) return `<div class="p5-attachment-list"><p>No files attached yet.</p></div>`;
-  return `<div class="p5-attachment-list">${state.attachments.map((attachment) => `<article><div>${icons.attachment}<span><strong>${escapeHTML(attachment.fileName)}</strong><small>${Math.max(1, Math.round((attachment.size || 0) / 1024))} KB</small></span></div><div><a class="btn btn-secondary" href="${escapeHTML(attachment.downloadUrl)}" target="_blank" rel="noopener">Open</a>${EDITABLE_STATUSES.has(item.status) && item.submittedByUid === state.user.uid ? `<button class="btn btn-secondary" type="button" data-p5-action="delete-attachment" data-id="${escapeHTML(attachment.id)}">Remove</button>` : ""}</div></article>`).join("")}</div>`;
+  return `<div class="p5-attachment-list">${state.attachments.map((attachment) => `<article><div>${icons.attachment}<span><strong>${escapeHTML(attachment.fileName)}</strong><small>${Math.max(1, Math.round((attachment.size || 0) / 1024))} KB · Private Firestore file</small></span></div><div><button class="btn btn-secondary" type="button" data-p5-action="download-attachment" data-id="${escapeHTML(attachment.id)}" data-file-name="${escapeHTML(attachment.fileName)}" data-content-type="${escapeHTML(attachment.contentType)}">Download</button>${EDITABLE_STATUSES.has(item.status) && item.submittedByUid === state.user.uid ? `<button class="btn btn-secondary" type="button" data-p5-action="delete-attachment" data-id="${escapeHTML(attachment.id)}">Remove</button>` : ""}</div></article>`).join("")}</div>`;
 }
 
 function submissionViewPage() {
@@ -557,32 +552,22 @@ function collectFormData(form, base) {
 }
 
 function validateFiles(files, existingCount = 0) {
-  if (existingCount + files.length > FILE_LIMIT) throw new Error(`A submission may contain no more than ${FILE_LIMIT} attachments.`);
-  for (const file of files) {
-    if (!ALLOWED_TYPES.has(file.type)) throw new Error(`${file.name} is not an approved file type.`);
-    if (file.size > FILE_SIZE_LIMIT) throw new Error(`${file.name} is larger than 10 MB.`);
-  }
+  return validateAttachmentFiles(files, existingCount);
 }
 
 async function uploadAttachments(submissionId, files) {
   const uploaded = [];
-  for (const file of files) {
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  for (const item of files) {
     const attachmentRef = doc(collection(db, "chapterSubmissions", submissionId, "attachments"));
-    const storagePath = `chapter-submissions/${state.selectedChapterId}/${submissionId}/${state.user.uid}/${attachmentRef.id}-${safeName}`;
-    const storageRef = ref(storage, storagePath);
-    await uploadBytes(storageRef, file, { contentType: file.type, customMetadata: { chapterId: state.selectedChapterId, submissionId, uploadedByUid: state.user.uid } });
-    const downloadUrl = await getDownloadURL(storageRef);
-    await setDoc(attachmentRef, {
-      chapterId: state.selectedChapterId,
-      submissionId,
-      storagePath,
-      downloadUrl,
-      fileName: file.name,
-      contentType: file.type,
-      size: file.size,
-      uploadedByUid: state.user.uid,
-      uploadedAt: serverTimestamp()
+    await saveFirestoreAttachment({
+      db,
+      attachmentRef,
+      item,
+      metadata: {
+        chapterId: state.selectedChapterId,
+        submissionId,
+        uploadedByUid: state.user.uid
+      }
     });
     uploaded.push(attachmentRef.id);
   }
@@ -595,10 +580,11 @@ async function handleSubmissionForm(form, submitter) {
   const config = typeConfig(type);
   const existing = state.currentSubmission;
   const base = existing || blankSubmission(type, form.title.value.trim() || config.label);
-  const files = Array.from(document.querySelector("#p5-files")?.files || []);
+  const selectedFiles = Array.from(document.querySelector("#p5-files")?.files || []);
+  let files = [];
   try {
     if (!form.reportValidity()) return;
-    validateFiles(files, state.attachments.length);
+    files = validateFiles(selectedFiles, state.attachments.length);
     if (config.attachmentRequired && !state.attachments.length && !files.length) throw new Error("This workflow requires at least one attachment.");
     const submissionRef = existing ? doc(db, "chapterSubmissions", existing.id) : doc(collection(db, "chapterSubmissions"));
     const data = collectFormData(form, base);
@@ -635,8 +621,10 @@ async function deleteAttachment(id) {
   const attachment = state.attachments.find((item) => item.id === id);
   if (!attachment || !state.currentSubmission || !EDITABLE_STATUSES.has(state.currentSubmission.status)) return;
   if (!confirm(`Remove ${attachment.fileName}?`)) return;
-  await deleteObject(ref(storage, attachment.storagePath));
-  await deleteDoc(doc(db, "chapterSubmissions", state.currentSubmission.id, "attachments", id));
+  await deleteFirestoreAttachment({
+    db,
+    attachmentRef: doc(db, "chapterSubmissions", state.currentSubmission.id, "attachments", id)
+  });
   await updateDoc(doc(db, "chapterSubmissions", state.currentSubmission.id), {
     attachmentCount: Math.max(0, (state.currentSubmission.attachmentCount || state.attachments.length) - 1),
     updatedAt: serverTimestamp()
@@ -684,13 +672,29 @@ async function reviewSubmission(id, status) {
   await loadAdminSubmissions();
 }
 
+async function downloadSubmissionAttachment(submissionId, attachmentId, fileName, contentType, button = null) {
+  if (button) button.disabled = true;
+  try {
+    await downloadFirestoreAttachment({
+      attachmentRef: doc(db, "chapterSubmissions", submissionId, "attachments", attachmentId),
+      fileName,
+      contentType
+    });
+  } catch (error) {
+    alert(error.message || "The attachment could not be downloaded.");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function loadAdminAttachments(id) {
   const target = document.querySelector("#p5-admin-attachments");
   if (!target) return;
   target.innerHTML = `<div class="spinner"></div>`;
   const snapshot = await getDocs(collection(db, "chapterSubmissions", id, "attachments"));
-  const attachments = snapshot.docs.map((item) => item.data());
-  target.innerHTML = attachments.length ? attachments.map((attachment) => `<a href="${escapeHTML(attachment.downloadUrl)}" target="_blank" rel="noopener">${icons.attachment}<span><strong>${escapeHTML(attachment.fileName)}</strong><small>${Math.max(1, Math.round((attachment.size || 0) / 1024))} KB</small></span></a>`).join("") : `<p>No attachments.</p>`;
+  const attachments = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  target.innerHTML = attachments.length ? attachments.map((attachment) => `<button class="btn btn-secondary" type="button" data-p5-admin-download data-submission-id="${escapeHTML(id)}" data-id="${escapeHTML(attachment.id)}" data-file-name="${escapeHTML(attachment.fileName)}" data-content-type="${escapeHTML(attachment.contentType)}">${icons.attachment}<span><strong>${escapeHTML(attachment.fileName)}</strong><small>${Math.max(1, Math.round((attachment.size || 0) / 1024))} KB · Download</small></span></button>`).join("") : `<p>No attachments.</p>`;
+  target.querySelectorAll("[data-p5-admin-download]").forEach((button) => button.addEventListener("click", () => downloadSubmissionAttachment(button.dataset.submissionId, button.dataset.id, button.dataset.fileName, button.dataset.contentType, button)));
 }
 
 function setAlert(targetId, type, title, message) {
@@ -738,6 +742,7 @@ function bindEvents() {
     event.preventDefault();
     handleSubmissionForm(event.currentTarget, event.submitter);
   });
+  document.querySelectorAll('[data-p5-action="download-attachment"]').forEach((button) => button.addEventListener("click", () => downloadSubmissionAttachment(state.currentSubmission.id, button.dataset.id, button.dataset.fileName, button.dataset.contentType, button)));
   document.querySelectorAll('[data-p5-action="delete-attachment"]').forEach((button) => button.addEventListener("click", () => deleteAttachment(button.dataset.id)));
   document.querySelectorAll('[data-p5-action="withdraw-submission"]').forEach((button) => button.addEventListener("click", () => withdrawSubmission(button.dataset.id)));
   document.querySelectorAll("[data-p5-review]").forEach((button) => button.addEventListener("click", () => reviewSubmission(button.dataset.id, button.dataset.p5Review)));

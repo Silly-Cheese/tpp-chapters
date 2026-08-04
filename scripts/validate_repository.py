@@ -48,7 +48,6 @@ def check_required_files() -> None:
         "firebase.json",
         "firestore.rules",
         "firestore.indexes.json",
-        "storage.rules",
         "site.webmanifest",
         "assets/js/firebase.js",
         "assets/js/phase8.js",
@@ -89,7 +88,7 @@ def check_json() -> None:
 
 
 def check_rules_balance() -> None:
-    for relative in ("firestore.rules", "storage.rules"):
+    for relative in ("firestore.rules",):
         path = ROOT / relative
         if not path.is_file():
             continue
@@ -98,8 +97,6 @@ def check_rules_balance() -> None:
             fail(f"Unbalanced braces in {relative}")
         if "match /{document=**}" not in text and relative == "firestore.rules":
             warn("Firestore Rules do not contain an explicit final deny-all match.")
-        if "match /{allPaths=**}" not in text and relative == "storage.rules":
-            warn("Storage Rules do not contain an explicit final deny-all match.")
 
 
 def check_firebase_configuration() -> None:
@@ -110,7 +107,6 @@ def check_firebase_configuration() -> None:
     expected = [
         'projectId: "tpp-chapters"',
         'authDomain: "tpp-chapters.firebaseapp.com"',
-        'storageBucket: "tpp-chapters.firebasestorage.app"',
     ]
     for marker in expected:
         if marker not in text:

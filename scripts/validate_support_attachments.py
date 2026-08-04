@@ -20,8 +20,8 @@ for marker in (
 shared_read = "allow read: if chapterCanAccessSupportTicket(chapterId, ticketId)\n        || staffCanAccessSupportTicket(chapterId, ticketId);"
 if storage.count(shared_read) != 2:
     errors.append("Both chapter and staff attachment paths must be readable by authorized ticket participants")
-if 'content="20260803.11"' not in index:
-    errors.append("Production build was not bumped to 20260803.11")
+if 'content="20260803.12"' not in index:
+    errors.append("Production build was not bumped to 20260803.12")
 
 if errors:
     for error in errors:
