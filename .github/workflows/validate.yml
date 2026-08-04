@@ -58,5 +58,5 @@ jobs:
       - name: Validate support center permissions
         run: python3 scripts/validate_support_center_permissions.py
 
-      - name: Validate support attachments
-        run: python3 scripts/validate_support_attachments.py
+      - name: Validate Firestore attachments
+        run: python3 scripts/validate_firestore_attachments.py

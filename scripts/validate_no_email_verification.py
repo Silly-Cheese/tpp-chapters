@@ -2,7 +2,7 @@ from pathlib import Path
 import sys
 
 errors = []
-scan = [*Path("assets/js").glob("*.js"), Path("firestore.rules"), Path("storage.rules")]
+scan = [*Path("assets/js").glob("*.js"), Path("firestore.rules")]
 for path in scan:
     text = path.read_text(encoding="utf-8")
     for marker in ("sendEmailVerification", "emailVerified", "email_verified", "hasRequiredEmailVerification", "chapterRoleRequiresVerifiedEmail"):
@@ -29,8 +29,8 @@ if "function hasChapterMembership(chapterId)" not in rules:
     errors.append("Firestore chapter-membership authorization is missing")
 
 index = Path("index.html").read_text(encoding="utf-8")
-if 'content="20260803.11"' not in index:
-    errors.append("The production build was not cache-busted to 20260803.11")
+if 'content="20260803.12"' not in index:
+    errors.append("The production build was not cache-busted to 20260803.12")
 
 if errors:
     for error in errors:

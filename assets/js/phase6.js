@@ -18,12 +18,12 @@ import {
   where,
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
+import { auth, db, authPersistenceReady } from "./firebase.js";
 import {
-  getDownloadURL,
-  ref,
-  uploadBytes
-} from "https://www.gstatic.com/firebasejs/12.17.0/firebase-storage.js";
-import { auth, db, storage, authPersistenceReady } from "./firebase.js";
+  downloadFirestoreAttachment,
+  saveFirestoreAttachment,
+  validateAttachmentFiles
+} from "./firestore-attachments.js";
 
 const app = document.querySelector("#app");
 
@@ -43,23 +43,7 @@ const ADMIN_ROUTES = new Set([
 ]);
 const PHASE6_ROUTES = new Set([...CHAPTER_ROUTES, ...ADMIN_ROUTES]);
 
-const FILE_LIMIT = 5;
-const FILE_SIZE_LIMIT = 10 * 1024 * 1024;
-const ALLOWED_TYPES = new Set([
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "image/png",
-  "image/jpeg"
-]);
-const FILE_TYPE_BY_EXTENSION = Object.freeze({
-  pdf: "application/pdf",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg"
-});
+
 
 const CATEGORY_LABELS = Object.freeze({
   general_assistance: "General Assistance",
@@ -247,40 +231,8 @@ function safeFileName(name) {
   return String(name).replace(/[^a-zA-Z0-9._-]/g, "_").slice(-140);
 }
 
-function normalizedFileType(file) {
-  const browserType = String(file?.type || "").trim().toLowerCase();
-  if (ALLOWED_TYPES.has(browserType)) return browserType;
-  const extension = String(file?.name || "").split(".").pop()?.toLowerCase() || "";
-  return FILE_TYPE_BY_EXTENSION[extension] || "";
-}
-
 function validateFiles(files) {
-  const items = Array.from(files || []);
-  if (items.length > FILE_LIMIT) throw new Error(`Attach no more than ${FILE_LIMIT} files.`);
-  return items.map((file) => {
-    const contentType = normalizedFileType(file);
-    if (!contentType) throw new Error(`${file.name} is not an approved PDF, Word, PNG, or JPEG file.`);
-    if (!Number.isFinite(file.size) || file.size <= 0) throw new Error(`${file.name} is empty and cannot be uploaded.`);
-    if (file.size > FILE_SIZE_LIMIT) throw new Error(`${file.name} is larger than 10 MB.`);
-    return { file, contentType };
-  });
-}
-
-function attachmentErrorMessage(error, fileName = "The attachment") {
-  const code = String(error?.code || "");
-  const details = String(error?.message || error?.serverResponse || "");
-  if (code === "storage/quota-exceeded" || /402|billing|blaze|spark|UserProjectAccountProblem/i.test(details)) {
-    return `${fileName} could not be uploaded because Cloud Storage for Firebase requires the Blaze plan and an active billing account.`;
-  }
-  if (code === "storage/bucket-not-found" || /bucket.+not found/i.test(details)) {
-    return `${fileName} could not be uploaded because the Firebase Storage bucket has not been created.`;
-  }
-  if (code === "storage/unauthorized" || code === "permission-denied") {
-    return `${fileName} could not be uploaded because the live Storage Rules do not authorize this chapter account.`;
-  }
-  if (code === "storage/canceled") return `${fileName} upload was canceled.`;
-  if (code === "storage/retry-limit-exceeded") return `${fileName} could not be uploaded after repeated network retries.`;
-  return `${fileName} could not be uploaded. ${details || "Firebase Storage rejected the file."}`;
+  return validateAttachmentFiles(files);
 }
 
 function cleanupListeners() {
@@ -605,7 +557,7 @@ function newTicketPage() {
         <label>Subject<input name="subject" type="text" minlength="5" maxlength="160" required placeholder="Briefly describe what you need help with"></label>
         <label>Message<textarea name="body" minlength="20" maxlength="5000" rows="9" required placeholder="Provide the details staff will need to respond."></textarea></label>
         ${adviser ? `<fieldset class="p6-visibility"><legend>Conversation visibility</legend><label><input type="radio" name="visibility" value="chapter" checked><span><strong>Chapter conversation</strong><small>Visible to active chapter leadership and authorized Prayer Project staff.</small></span></label><label><input type="radio" name="visibility" value="adviser_private"><span><strong>Confidential Adviser conversation</strong><small>Visible only to you and authorized Prayer Project staff.</small></span></label></fieldset>` : `<input type="hidden" name="visibility" value="chapter">`}
-        <label class="p6-file-field">${icons.attachment}<span><strong>Optional attachments</strong><small>Up to 5 PDF, Word, PNG, or JPEG files. Maximum 10 MB each.</small></span><input name="files" type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"></label>
+        <label class="p6-file-field">${icons.attachment}<span><strong>Optional attachments</strong><small>Up to 5 PDF, Word, PNG, or JPEG files. Maximum 2 MB each.</small></span><input name="files" type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"></label>
         <label class="p6-consent"><input name="confirmation" type="checkbox" required><span>I confirm this request contains no unnecessary private prayer-request details or sensitive personal information.</span></label>
         <div class="p6-form-actions"><a class="btn btn-secondary" href="#/chapter/support">Cancel</a><button class="btn btn-primary" id="p6-create-ticket" type="submit">${icons.send} Create ticket</button></div>
       </form>
@@ -616,7 +568,7 @@ function newTicketPage() {
 function messageMarkup(message) {
   const mine = message.authorUid === state.user?.uid;
   const staff = message.senderType === "staff";
-  return `<article class="p6-message ${mine ? "mine" : ""} ${staff ? "staff" : "chapter"}"><div class="p6-message-avatar">${escapeHTML(initials(message.authorName))}</div><div class="p6-message-body"><header><strong>${escapeHTML(message.authorName)}</strong><span>${escapeHTML(roleLabel(message.authorRole))}</span><time>${escapeHTML(formatDate(message.createdAt, { time: true }))}</time></header><p>${escapeHTML(message.body).replaceAll("\n", "<br>")}</p>${message.attachments?.length ? `<div class="p6-message-files">${message.attachments.map((file) => `<a href="${escapeHTML(file.downloadUrl)}" target="_blank" rel="noopener">${icons.attachment}<span>${escapeHTML(file.fileName)}</span></a>`).join("")}</div>` : ""}</div></article>`;
+  return `<article class="p6-message ${mine ? "mine" : ""} ${staff ? "staff" : "chapter"}"><div class="p6-message-avatar">${escapeHTML(initials(message.authorName))}</div><div class="p6-message-body"><header><strong>${escapeHTML(message.authorName)}</strong><span>${escapeHTML(roleLabel(message.authorRole))}</span><time>${escapeHTML(formatDate(message.createdAt, { time: true }))}</time></header><p>${escapeHTML(message.body).replaceAll("\n", "<br>")}</p>${message.attachments?.length ? `<div class="p6-message-files">${message.attachments.map((file) => `<button type="button" data-p6-action="download-attachment" data-ticket-id="${escapeHTML(message.ticketId)}" data-message-id="${escapeHTML(message.id)}" data-attachment-id="${escapeHTML(file.id)}" data-file-name="${escapeHTML(file.fileName)}" data-content-type="${escapeHTML(file.contentType)}">${icons.attachment}<span>${escapeHTML(file.fileName)}</span></button>`).join("")}</div>` : ""}</div></article>`;
 }
 
 function ticketConversationPage({ admin = false } = {}) {
@@ -671,50 +623,43 @@ function adminCommunicationsPage() {
 async function uploadMessageAttachments(ticket, messageId, files) {
   const uploaded = [];
   for (const item of files) {
-    const file = item.file || item;
-    const contentType = item.contentType || normalizedFileType(file);
-    const fileName = `${crypto.randomUUID()}-${safeFileName(file.name)}`;
-    const uploaderType = SUPPORT_STAFF_ROLES.has(state.profile?.systemRole) ? "staff" : "chapter";
-    const path = `support-attachments/${uploaderType}/${ticket.chapterId}/${ticket.id}/${messageId}/${state.user.uid}/${fileName}`;
-    const storageRef = ref(storage, path);
-    try {
-      await uploadBytes(storageRef, file, {
-        contentType,
-        customMetadata: {
-          ticketId: ticket.id,
-          chapterId: ticket.chapterId,
-          messageId,
-          uploadedByUid: state.user.uid,
-          originalFileName: safeFileName(file.name)
-        }
-      });
-      const downloadUrl = await getDownloadURL(storageRef);
-      const attachmentRef = doc(collection(db, "supportTickets", ticket.id, "messages", messageId, "attachments"));
-      await setDoc(attachmentRef, {
+    const attachmentRef = doc(collection(db, "supportTickets", ticket.id, "messages", messageId, "attachments"));
+    await saveFirestoreAttachment({
+      db,
+      attachmentRef,
+      item,
+      metadata: {
         ticketId: ticket.id,
         chapterId: ticket.chapterId,
         messageId,
-        uploadedByUid: state.user.uid,
-        fileName: file.name,
-        storagePath: path,
-        downloadUrl,
-        contentType,
-        size: file.size,
-        createdAt: serverTimestamp()
-      });
-      uploaded.push(attachmentRef.id);
-    } catch (error) {
-      const attachmentError = new Error(attachmentErrorMessage(error, file.name));
-      attachmentError.code = error?.code || "attachment/upload-failed";
-      attachmentError.cause = error;
-      throw attachmentError;
-    }
+        uploadedByUid: state.user.uid
+      }
+    });
+    uploaded.push(attachmentRef.id);
   }
   if (uploaded.length) {
     await updateDoc(doc(db, "supportTickets", ticket.id, "messages", messageId), {
       hasAttachments: true,
       attachmentCount: uploaded.length
     });
+  }
+}
+
+async function downloadMessageAttachment(button) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "Preparing…";
+  try {
+    await downloadFirestoreAttachment({
+      attachmentRef: doc(db, "supportTickets", button.dataset.ticketId, "messages", button.dataset.messageId, "attachments", button.dataset.attachmentId),
+      fileName: button.dataset.fileName,
+      contentType: button.dataset.contentType
+    });
+  } catch (error) {
+    toast("Attachment unavailable", error.message || "The private file could not be downloaded.", "danger");
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
   }
 }
 
@@ -796,7 +741,7 @@ async function createTicket(form) {
   } catch (error) {
     console.error("Unable to create support ticket.", error);
     if (ticketCommitted && createdTicketId) {
-      setAlert("p6-form-alert", "warning", "Ticket created without its attachment", error.message || "The ticket was saved, but Firebase rejected the file upload.");
+      setAlert("p6-form-alert", "warning", "Ticket created without its attachment", error.message || "The ticket was saved, but Firestore rejected the private file data.");
       setTimeout(() => navigate(`/chapter/support/ticket?id=${encodeURIComponent(createdTicketId)}`), 1800);
     } else {
       setAlert("p6-form-alert", "danger", "Ticket not created", error.message || "Firebase rejected the support request.");
@@ -985,6 +930,7 @@ function bindEvents() {
   document.querySelector("#p6-admin-filter-status")?.addEventListener("change", (event) => { state.adminFilter.status = event.target.value; renderPhase6({ prepare: false }); });
   document.querySelector("#p6-admin-filter-category")?.addEventListener("change", (event) => { state.adminFilter.category = event.target.value; renderPhase6({ prepare: false }); });
   document.querySelector("#p6-admin-filter-priority")?.addEventListener("change", (event) => { state.adminFilter.priority = event.target.value; renderPhase6({ prepare: false }); });
+  document.querySelectorAll('[data-p6-action="download-attachment"]').forEach((button) => button.addEventListener("click", () => downloadMessageAttachment(button)));
   document.querySelectorAll('[data-p6-action="ack-notice"]').forEach((button) => button.addEventListener("click", () => acknowledgeNotice(button.dataset.noticeId)));
   document.querySelector('[data-p6-action="close-ticket"]')?.addEventListener("click", closeTicket);
   document.querySelector('[data-p6-action="save-ticket-controls"]')?.addEventListener("click", saveTicketControls);

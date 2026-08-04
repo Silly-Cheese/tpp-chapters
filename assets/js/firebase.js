@@ -5,13 +5,11 @@ import {
   browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-firestore.js";
-import { getStorage } from "https://www.gstatic.com/firebasejs/12.17.0/firebase-storage.js";
 
 export const firebaseConfig = Object.freeze({
   apiKey: "AIzaSyDtn5Tt5syKJm9gQi-tQRGYLv0_636C13Y",
   authDomain: "tpp-chapters.firebaseapp.com",
   projectId: "tpp-chapters",
-  storageBucket: "tpp-chapters.firebasestorage.app",
   messagingSenderId: "962501948087",
   appId: "1:962501948087:web:d145a48db8bac5f3d41332"
 });
@@ -19,7 +17,6 @@ export const firebaseConfig = Object.freeze({
 export const firebaseApp = initializeApp(firebaseConfig);
 export const auth = getAuth(firebaseApp);
 export const db = getFirestore(firebaseApp);
-export const storage = getStorage(firebaseApp);
 
 export const authPersistenceReady = setPersistence(auth, browserLocalPersistence)
   .catch((error) => {
