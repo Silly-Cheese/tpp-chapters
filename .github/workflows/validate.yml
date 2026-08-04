@@ -7,7 +7,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
@@ -16,20 +16,11 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-
-      - name: Apply support center permissions fix
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/support-center-permissions'
-        run: |
-          python3 scripts/apply_support_center_permissions_fix.py
-          python3 scripts/update_build_validators_20260803_10.py
 
       - name: Validate JavaScript syntax
         shell: bash
@@ -65,19 +56,4 @@ jobs:
         run: python3 scripts/validate_mobile_members_roster.py
 
       - name: Validate support center permissions
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/support-center-permissions'
         run: python3 scripts/validate_support_center_permissions.py
-
-      - name: Commit generated support center fix
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/support-center-permissions'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/js/phase6.js assets/support-center-fix.css firestore.rules index.html \
-            scripts/validate_support_center_permissions.py \
-            scripts/validate_create_chapter_portal.py \
-            scripts/validate_no_email_verification.py \
-            scripts/validate_chapter_portal_v2.py \
-            scripts/validate_mobile_members_roster.py
-          git commit -m "Fix support center permissions and recovery" || exit 0
-          git push origin HEAD:fix/support-center-permissions
