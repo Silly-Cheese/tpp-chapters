@@ -265,13 +265,32 @@ async function loadProfile(user) {
 
 async function loadMemberships() {
   state.memberships = [];
-  const snapshot = await getDocs(query(collection(db, "chapterMemberships"), where("uid", "==", state.user.uid)));
-  state.memberships = snapshot.docs
-    .map((item) => ({ id: item.id, ...item.data() }))
-    .filter((item) => item.status === "active")
-    .sort((a, b) => String(a.chapterName).localeCompare(String(b.chapterName)));
+  const records = [];
+  const primaryChapterId = state.profile?.primaryChapterId;
+
+  if (primaryChapterId) {
+    try {
+      const direct = await getDoc(doc(db, "chapterMemberships", `${primaryChapterId}__${state.user.uid}`));
+      if (direct.exists()) records.push({ id: direct.id, ...direct.data() });
+    } catch (error) {
+      if (error?.code !== "permission-denied") throw error;
+    }
+  }
+
+  try {
+    const snapshot = await getDocs(query(collection(db, "chapterMemberships"), where("uid", "==", state.user.uid)));
+    snapshot.docs.forEach((item) => {
+      if (!records.some((record) => record.id === item.id)) records.push({ id: item.id, ...item.data() });
+    });
+  } catch (error) {
+    if (!records.length) throw error;
+  }
+
+  state.memberships = records
+    .filter((item) => item.status === "active" && item.uid === state.user.uid)
+    .sort((a, b) => String(a.chapterName || a.chapterId).localeCompare(String(b.chapterName || b.chapterId)));
   const saved = localStorage.getItem(`tpp-selected-chapter-${state.user.uid}`);
-  const preferred = saved || state.profile?.primaryChapterId;
+  const preferred = saved || primaryChapterId;
   state.selectedChapterId = state.memberships.some((item) => item.chapterId === preferred)
     ? preferred
     : state.memberships[0]?.chapterId || null;
@@ -294,8 +313,13 @@ async function loadChapterContext() {
     .sort((a, b) => (toDate(b.publishedAt)?.getTime() || 0) - (toDate(a.publishedAt)?.getTime() || 0));
   await Promise.all(state.notices.map(async (notice) => {
     const receiptId = `${notice.id}__${state.user.uid}`;
-    const receipt = await getDoc(doc(chapterRef, "noticeReceipts", receiptId));
-    if (receipt.exists()) state.noticeReceipts.set(notice.id, receipt.data());
+    try {
+      const receipt = await getDoc(doc(chapterRef, "noticeReceipts", receiptId));
+      if (receipt.exists()) state.noticeReceipts.set(notice.id, receipt.data());
+    } catch (error) {
+      if (error?.code !== "permission-denied") throw error;
+      console.warn("Notice acknowledgment state is not available yet.", error);
+    }
   }));
 }
 
@@ -489,7 +513,10 @@ function pageHeading(kicker, title, description, action = "") {
 }
 
 function gatePage(message) {
-  return `<main class="p6-gate" id="main-content"><section><img src="assets/brand-mark.svg" alt=""><p class="p6-kicker">Protected communications</p><h1>Access unavailable.</h1><p>${escapeHTML(message)}</p><a class="btn btn-primary" href="#/login">Return to sign in</a></section></main>`;
+  const signedInActions = state.user
+    ? `<a class="btn btn-primary" href="#/chapter/overview">Return to chapter portal</a><button class="btn btn-secondary" type="button" data-p6-action="refresh">Retry support center</button>`
+    : `<a class="btn btn-primary" href="#/login">Return to sign in</a>`;
+  return `<main class="p6-gate" id="main-content"><section><img src="assets/brand-mark.svg" alt=""><p class="p6-kicker">Protected communications</p><h1>Support center unavailable.</h1><p>${escapeHTML(message)}</p><div class="p6-gate-actions">${signedInActions}</div></section></main>`;
 }
 
 function ticketCard(ticket, { admin = false } = {}) {

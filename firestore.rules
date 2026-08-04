@@ -561,12 +561,10 @@ service cloud.firestore {
     function canAccessSupportTicketData(ticket) {
       return canManageSupport()
         || (hasChapterMembership(ticket.chapterId)
-          && ((ticket.visibility == 'chapter'
-              && ('chapter:' + ticket.chapterId) in ticket.accessKeys)
+          && (ticket.visibility == 'chapter'
             || (ticket.visibility == 'adviser_private'
               && ticket.createdByUid == request.auth.uid
-              && hasChapterMembershipRole(ticket.chapterId, ['adviser'])
-              && ('user:' + request.auth.uid) in ticket.accessKeys)));
+              && hasChapterMembershipRole(ticket.chapterId, ['adviser']))));
     }
 
     function validNewSupportTicket(ticketId) {
@@ -893,8 +891,8 @@ service cloud.firestore {
       }
 
       match /noticeReceipts/{receiptId} {
-        allow read: if canReadChapterOperations()
-          || (hasChapterMembership(chapterId) && resource.data.uid == request.auth.uid);
+        allow get: if canReadChapterOperations() || hasChapterMembership(chapterId);
+        allow list: if canReadChapterOperations();
         allow create, update: if validNoticeReceipt(chapterId, receiptId);
         allow delete: if canManageChapterWorkspaces();
       }
@@ -960,8 +958,7 @@ service cloud.firestore {
 
     match /supportReadStates/{readStateId} {
       allow read: if canManageSupport()
-        || (signedIn() && resource.data.uid == request.auth.uid
-          && canAccessSupportTicketData(supportTicket(resource.data.ticketId)));
+        || (signedIn() && resource.data.uid == request.auth.uid);
       allow create, update: if validSupportReadState(readStateId);
       allow delete: if isOwner() || (signedIn() && resource.data.uid == request.auth.uid);
     }
