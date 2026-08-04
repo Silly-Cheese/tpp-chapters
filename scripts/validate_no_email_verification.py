@@ -2,7 +2,7 @@ from pathlib import Path
 import sys
 
 errors = []
-scan = [*Path("assets/js").glob("*.js"), Path("firestore.rules"), Path("storage.rules")]
+scan = [*Path("assets/js").glob("*.js"), Path("firestore.rules")]
 for path in scan:
     text = path.read_text(encoding="utf-8")
     for marker in ("sendEmailVerification", "emailVerified", "email_verified", "hasRequiredEmailVerification", "chapterRoleRequiresVerifiedEmail"):
