@@ -54,3 +54,6 @@ jobs:
 
       - name: Validate mobile drawer and member roster
         run: python3 scripts/validate_mobile_members_roster.py
+
+      - name: Validate support center permissions
+        run: python3 scripts/validate_support_center_permissions.py

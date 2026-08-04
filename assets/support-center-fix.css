@@ -1,0 +1,51 @@
+/* Support Center permission and contrast refinements. */
+.p6-gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--surface-soft, #f7f3e8);
+  color: var(--text, #20201d);
+}
+.p6-gate > section {
+  width: min(620px, 100%);
+  padding: clamp(32px, 7vw, 64px);
+  border: 1px solid var(--border, #d8d0bf);
+  border-radius: 28px;
+  background: var(--surface, #fff);
+  color: var(--text, #20201d);
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(38, 31, 20, .12);
+}
+.p6-gate h1 {
+  margin: 22px 0 14px;
+  color: var(--text, #20201d) !important;
+  font-family: Georgia, serif;
+  font-size: clamp(2.3rem, 8vw, 4.8rem);
+  line-height: .98;
+}
+.p6-gate > section > p:last-of-type {
+  color: var(--muted, #6f675b);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+.p6-gate-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+[data-theme="dark"] .p6-gate {
+  --surface-soft: #0f0e0b;
+  --surface: #191814;
+  --text: #f5efe4;
+  --muted: #b6ada0;
+  --border: rgba(255,255,255,.12);
+}
+@media (max-width: 620px) {
+  .p6-gate { padding: 18px; }
+  .p6-gate > section { padding: 34px 22px; }
+  .p6-gate-actions { display: grid; grid-template-columns: 1fr; }
+  .p6-gate-actions .btn { width: 100%; }
+}
