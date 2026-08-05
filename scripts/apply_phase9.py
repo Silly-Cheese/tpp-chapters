@@ -177,7 +177,7 @@ helpers = r'''
         'updatedByUid', 'updatedAt'
       ];
       return hasChapterMembershipRole(assignment.chapterId, ['director', 'adviser'])
-        && !resource.data.status in ['approved', 'denied', 'waived']
+        && !(resource.data.status in ['approved', 'denied', 'waived'])
         && role == resource.data.currentStep
         && formResponseBaseValid(assignmentId, request.resource.data)
         && formResponseStatusEditable(request.resource.data.status)
@@ -190,14 +190,14 @@ helpers = r'''
         && request.resource.data.updatedAt == request.time
         && ((role == 'director'
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-                commonKeys.concat([
+                (commonKeys + [
                   'directorAnswersJson', 'directorCertificationName',
                   'directorCertificationTitle', 'directorCertifiedAt', 'directorUid'
                 ]))
               && assignment.workflow in ['single_director', 'director_then_adviser'])
             || (role == 'adviser'
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-                commonKeys.concat([
+                (commonKeys + [
                   'adviserAnswersJson', 'adviserCertificationName',
                   'adviserCertificationTitle', 'adviserCertifiedAt', 'adviserUid'
                 ]))
