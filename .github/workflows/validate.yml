@@ -60,3 +60,6 @@ jobs:
 
       - name: Validate Firestore attachments
         run: python3 scripts/validate_firestore_attachments.py
+
+      - name: Validate Phase 9 required forms
+        run: python3 scripts/validate_phase9.py

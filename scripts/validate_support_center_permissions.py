@@ -26,9 +26,9 @@ for marker in (
 
 if "('chapter:' + ticket.chapterId) in ticket.accessKeys" in rules:
     errors.append("Support-ticket reads still depend on a query-unprovable accessKeys predicate")
-if 'content="20260803.12"' not in index:
-    errors.append("Production build was not bumped to 20260803.12")
-if 'assets/support-center-fix.css?v=20260803.12' not in index:
+if 'content="20260805.1"' not in index:
+    errors.append("Production build was not bumped to 20260805.1")
+if 'assets/support-center-fix.css?v=20260805.1' not in index:
     errors.append("Support Center fix stylesheet is not loaded")
 if ".p6-gate h1" not in css or '[data-theme="dark"] .p6-gate' not in css:
     errors.append("Support gate contrast rules are incomplete")
