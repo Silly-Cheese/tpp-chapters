@@ -35,6 +35,10 @@ for marker in (
     'saveFirestoreAttachment',
     'complianceRequirementId',
     'required_form_campaign_created',
+    'if (document.querySelector("[data-phase9-root]")) return;',
+    'validateRequiredAnswers(role, answers, form)',
+    'Attach the required file:',
+    'The chapter must formally submit this response before an administrative decision can be recorded.',
 ):
     if marker not in phase9:
         errors.append(f"Phase 9 application is missing: {marker}")
