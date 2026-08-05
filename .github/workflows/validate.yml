@@ -43,6 +43,7 @@ jobs:
           path.write_text(text, encoding='utf-8')
           PY
           python3 scripts/apply_phase9.py
+          python3 scripts/patch_phase9_runtime.py
 
       - name: Validate JavaScript syntax
         shell: bash
@@ -98,5 +99,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "Generate Phase 9 required forms release" || exit 0
+          git commit -m "Harden Phase 9 required forms runtime" || exit 0
           git push origin HEAD:phase-9-required-forms
