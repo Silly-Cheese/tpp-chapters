@@ -22,9 +22,15 @@ for marker in (
     '"/admin/forms/assign"',
     '"/admin/forms/responses"',
     '"/admin/forms/review"',
+    '"/admin/memberships"',
+    '"/admin/registry"',
+    '"/admin/audit"',
     '"/chapter/forms"',
     '"/chapter/forms/fill"',
     '"/chapter/forms/view"',
+    '"/chapter/members"',
+    '"/chapter/documents"',
+    '"/chapter/notices"',
     'FORM-INSTITUTIONAL-APPROVAL',
     'FORM-ADVISER-AGREEMENT',
     'FORM-DIRECTOR-AGREEMENT',
@@ -39,6 +45,10 @@ for marker in (
     'validateRequiredAnswers(role, answers, form)',
     'Attach the required file:',
     'The chapter must formally submit this response before an administrative decision can be recorded.',
+    'const selectedFileCount =',
+    'if (submit && selectedFileCount)',
+    'const stagingData =',
+    'const finalBatch = writeBatch(db);',
 ):
     if marker not in phase9:
         errors.append(f"Phase 9 application is missing: {marker}")
@@ -67,6 +77,8 @@ for marker in (
     'match /history/{historyId}',
     'match /attachments/{attachmentId}',
     'match /chunks/{chunkId}',
+    "request.resource.data.actorRole in [\n                'owner', 'chapterAdmin', 'complianceAdmin'",
+    'request.resource.data.actorRole == chapterMembership(assignment.chapterId).role',
 ):
     if marker not in rules:
         errors.append(f"Firestore Rules are missing Phase 9 marker: {marker}")
