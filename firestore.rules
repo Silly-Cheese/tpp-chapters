@@ -1000,11 +1000,19 @@ service cloud.firestore {
         ])
         && request.resource.data.assignmentId == assignmentId
         && request.resource.data.chapterId == assignment.chapterId
-        && request.resource.data.eventType in [
-          'director_submitted', 'response_submitted', 'approved',
-          'changes_requested', 'denied', 'waived'
-        ]
         && request.resource.data.actorUid == request.auth.uid
+        && ((canReviewRequiredForms()
+              && request.resource.data.eventType in [
+                'approved', 'changes_requested', 'denied', 'waived'
+              ]
+              && request.resource.data.actorRole in [
+                'owner', 'chapterAdmin', 'complianceAdmin'
+              ])
+            || (hasChapterMembershipRole(assignment.chapterId, ['director', 'adviser'])
+              && request.resource.data.eventType in [
+                'director_submitted', 'response_submitted'
+              ]
+              && request.resource.data.actorRole == chapterMembership(assignment.chapterId).role))
         && request.resource.data.actorName is string
         && request.resource.data.actorName.size() >= 2
         && request.resource.data.actorName.size() <= 100

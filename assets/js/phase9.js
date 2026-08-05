@@ -426,15 +426,22 @@ function adminLayout(content, title = "Forms & Agreements") {
         ${adminNavLink("/admin/dashboard", "Dashboard", icons.home)}
         ${adminNavLink("/admin/chapters", "Chapters", icons.shield)}
         ${adminNavLink("/admin/users", "Users", icons.users)}
+        ${adminNavLink("/admin/memberships", "Memberships", icons.users)}
+        ${adminNavLink("/admin/registry", "Public registry", icons.shield)}
+        ${adminNavLink("/admin/concerns", "Concern reports", icons.alert)}
+        ${adminNavLink("/admin/audit", "Audit history", icons.forms)}
+        ${adminNavLink("/admin/settings", "System settings", icons.shield)}
         ${adminNavLink("/admin/forms", "Forms & agreements", icons.forms)}
         <span class="p7-nav-label">Form operations</span>
         ${adminNavLink("/admin/forms/template", "Create form", icons.plus)}
         ${adminNavLink("/admin/forms/assign", "Assign forms", icons.send)}
         ${adminNavLink("/admin/forms/responses", "Review responses", icons.check)}
         <span class="p7-nav-label">Specialist workspaces</span>
+        <a class="p7-nav-link" href="#/admin/invitations">${icons.plus}<span>Account invitations</span></a>
         <a class="p7-nav-link" href="#/admin/chapter-workspaces">${icons.shield}<span>Workspace setup</span></a>
         <a class="p7-nav-link" href="#/admin/submissions">${icons.forms}<span>Submission review</span></a>
         <a class="p7-nav-link" href="#/admin/support">${icons.alert}<span>Support queue</span></a>
+        <a class="p7-nav-link" href="#/admin/communications">${icons.send}<span>Notice publishing</span></a>
       </nav>
       <div class="p7-sidebar-user"><div>${esc(initials(name))}</div><span><strong>${esc(name)}</strong><small>${esc(roleLabel(currentRole()))}</small></span></div>
     </aside>
@@ -448,7 +455,9 @@ function adminLayout(content, title = "Forms & Agreements") {
 }
 
 function chapterNavLink(path, label, graphic, count = 0) {
-  return `<a class="${route() === path ? "active" : ""}" href="#${path}">${graphic}<span>${esc(label)}</span>${count ? `<em>${count}</em>` : ""}</a>`;
+  const current = route();
+  const active = current === path || (path === "/chapter/forms" && current.startsWith("/chapter/forms/"));
+  return `<a class="${active ? "active" : ""}" href="#${path}">${graphic}<span>${esc(label)}</span>${count ? `<em>${count}</em>` : ""}</a>`;
 }
 
 function chapterLayout(content, title = "Required Forms") {
@@ -465,7 +474,11 @@ function chapterLayout(content, title = "Required Forms") {
         ${chapterNavLink("/chapter/overview", "Overview", icons.home)}
         ${chapterNavLink("/chapter/compliance", "Standing & compliance", icons.shield)}
         ${chapterNavLink("/chapter/leadership", "Leadership", icons.users)}
+        ${chapterNavLink("/chapter/members", "Members", icons.users)}
+        ${chapterNavLink("/chapter/documents", "Documents", icons.forms)}
+        ${chapterNavLink("/chapter/notices", "Notices", icons.alert)}
         ${chapterNavLink("/chapter/forms", "Required forms", icons.forms, pending)}
+        ${membership?.role === "adviser" ? chapterNavLink("/chapter/adviser", "Adviser oversight", icons.shield) : ""}
         <span>Operations</span>
         ${chapterNavLink("/chapter/workflows", "Reports & requests", icons.send)}
         ${chapterNavLink("/chapter/submissions", "Submission history", icons.clock)}
@@ -1226,7 +1239,9 @@ async function saveResponse({ submit = false } = {}) {
   const nextStep = submit
     ? (assignment.workflow === "director_then_adviser" && role === "director" ? "adviser" : "review")
     : role;
-  const data = {
+  const selectedFileCount = Array.from(form.querySelectorAll('input[type="file"][data-field-id]'))
+    .reduce((total, input) => total + (input.files?.length || 0), 0);
+  const baseData = {
     assignmentId: assignment.id,
     campaignId: assignment.campaignId,
     templateId: assignment.templateId,
@@ -1256,11 +1271,52 @@ async function saveResponse({ submit = false } = {}) {
     updatedByUid: state.user.uid,
     updatedAt: serverTimestamp()
   };
-  const batch = writeBatch(db);
-  batch.set(responseRef, data, { merge: true });
-  if (submit) {
-    const historyRef = doc(collection(responseRef, "history"));
-    batch.set(historyRef, {
+
+  if (submit && selectedFileCount) {
+    const stagingData = {
+      ...baseData,
+      status: "draft",
+      currentStep: role,
+      returnRole: existing?.returnRole || "",
+      directorCertificationName: existing?.directorCertificationName || "",
+      directorCertificationTitle: existing?.directorCertificationTitle || "",
+      directorCertifiedAt: existing?.directorCertifiedAt || null,
+      directorUid: existing?.directorUid || "",
+      adviserCertificationName: existing?.adviserCertificationName || "",
+      adviserCertificationTitle: existing?.adviserCertificationTitle || "",
+      adviserCertifiedAt: existing?.adviserCertifiedAt || null,
+      adviserUid: existing?.adviserUid || "",
+      submittedAt: existing?.submittedAt || null,
+      reviewNote: existing?.reviewNote || ""
+    };
+    await setDoc(responseRef, stagingData, { merge: true });
+    await uploadResponseFiles(form, responseRef);
+
+    const finalBatch = writeBatch(db);
+    const certification = role === "director"
+      ? {
+          directorCertificationName: form.certificationName.value.trim(),
+          directorCertificationTitle: form.certificationTitle.value.trim(),
+          directorCertifiedAt: serverTimestamp(),
+          directorUid: state.user.uid
+        }
+      : {
+          adviserCertificationName: form.certificationName.value.trim(),
+          adviserCertificationTitle: form.certificationTitle.value.trim(),
+          adviserCertifiedAt: serverTimestamp(),
+          adviserUid: state.user.uid
+        };
+    finalBatch.update(responseRef, {
+      status: nextStatus,
+      currentStep: nextStep,
+      returnRole: "",
+      ...certification,
+      submittedAt: nextStatus === "submitted" ? serverTimestamp() : (existing?.submittedAt || null),
+      reviewNote: "",
+      updatedByUid: state.user.uid,
+      updatedAt: serverTimestamp()
+    });
+    finalBatch.set(doc(collection(responseRef, "history")), {
       assignmentId: assignment.id,
       chapterId: assignment.chapterId,
       eventType: nextStatus === "awaiting_adviser" ? "director_submitted" : "response_submitted",
@@ -1270,9 +1326,26 @@ async function saveResponse({ submit = false } = {}) {
       note: "",
       createdAt: serverTimestamp()
     });
+    await finalBatch.commit();
+  } else {
+    const batch = writeBatch(db);
+    batch.set(responseRef, baseData, { merge: true });
+    if (submit) {
+      batch.set(doc(collection(responseRef, "history")), {
+        assignmentId: assignment.id,
+        chapterId: assignment.chapterId,
+        eventType: nextStatus === "awaiting_adviser" ? "director_submitted" : "response_submitted",
+        actorUid: state.user.uid,
+        actorName: state.profile?.displayName || state.user.email,
+        actorRole: role,
+        note: "",
+        createdAt: serverTimestamp()
+      });
+    }
+    await batch.commit();
+    if (!submit) await uploadResponseFiles(form, responseRef);
   }
-  await batch.commit();
-  await uploadResponseFiles(form, responseRef);
+
   await loadCurrentAssignment(assignment.id);
   setAlert("p9-response-alert", "success", submit ? "Response submitted" : "Draft saved", submit ? (nextStatus === "awaiting_adviser" ? "The Chapter Adviser may now review and certify the form." : "The response is now awaiting administrative review.") : "Your answers were saved privately.");
   if (submit) setTimeout(() => go(`/chapter/forms/view?id=${encodeURIComponent(assignment.id)}`), 1100);
