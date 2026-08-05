@@ -1165,10 +1165,16 @@ function collectAnswers(form, role) {
   return answers;
 }
 
-function validateRequiredAnswers(role, answers) {
+function validateRequiredAnswers(role, answers, form) {
   const schema = schemaForAssignment(state.currentAssignment);
   for (const section of schema.sections) {
-    for (const field of section.fields.filter((item) => (item.role || initialStep(state.currentAssignment.workflow)) === role && item.required !== false && item.type !== "file")) {
+    for (const field of section.fields.filter((item) => (item.role || initialStep(state.currentAssignment.workflow)) === role && item.required !== false)) {
+      if (field.type === "file") {
+        const alreadyUploaded = state.currentAttachments.some((item) => item.fieldId === field.id);
+        const selected = form.querySelector(`input[type="file"][data-field-id="${CSS.escape(field.id)}"]`)?.files?.length || 0;
+        if (!alreadyUploaded && !selected) throw new Error(`Attach the required file: ${field.label}`);
+        continue;
+      }
       const value = answers[field.id];
       if (field.type === "acknowledgment" && value !== true) throw new Error(`Confirm: ${field.label}`);
       if (Array.isArray(value) && !value.length) throw new Error(`Complete: ${field.label}`);
@@ -1208,7 +1214,7 @@ async function saveResponse({ submit = false } = {}) {
   const role = selectedMembership().role;
   const answers = collectAnswers(form, role);
   if (submit) {
-    validateRequiredAnswers(role, answers);
+    validateRequiredAnswers(role, answers, form);
     if (!form.certificationConfirmed.checked) throw new Error("Confirm the authenticated certification before submitting.");
     if (form.certificationName.value.trim().length < 2 || form.certificationTitle.value.trim().length < 2) throw new Error("Enter your full name and official title for certification.");
   }
@@ -1278,7 +1284,10 @@ async function reviewResponse(status) {
   const note = form?.reviewNote.value.trim() || "";
   const returnRole = form?.returnRole.value || "director";
   if (["changes_requested", "denied"].includes(status) && note.length < 10) throw new Error("Provide an administrative note of at least ten characters.");
-  if (status === "approved" && !state.currentResponse) throw new Error("A response must exist before this assignment can be approved.");
+  if (["approved", "changes_requested", "denied"].includes(status)
+      && !["submitted", "under_review"].includes(state.currentResponse?.status)) {
+    throw new Error("The chapter must formally submit this response before an administrative decision can be recorded.");
+  }
   const assignment = state.currentAssignment;
   const assignmentRef = doc(db, "formAssignments", assignment.id);
   const responseRef = doc(assignmentRef, "responses", "current");
@@ -1535,6 +1544,7 @@ async function render(prepare = true) {
 }
 
 function augmentExistingPortal() {
+  if (document.querySelector("[data-phase9-root]")) return;
   const chapterNav = document.querySelector(".cp2-nav");
   if (chapterNav && CHAPTER_ROLES.has(currentRole()) && !chapterNav.querySelector("[data-p9-chapter-nav]")) {
     const link = document.createElement("a");
