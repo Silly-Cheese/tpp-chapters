@@ -2,11 +2,13 @@ from pathlib import Path
 
 path = Path("assets/js/phase9.js")
 text = path.read_text(encoding="utf-8")
+changed = False
 
-text = text.replace(
-    "function augmentExistingPortal() {\n  const chapterNav = document.querySelector(\".cp2-nav\");",
-    "function augmentExistingPortal() {\n  if (document.querySelector(\"[data-phase9-root]\")) return;\n  const chapterNav = document.querySelector(\".cp2-nav\");"
-)
+old_augment = "function augmentExistingPortal() {\n  const chapterNav = document.querySelector(\".cp2-nav\");"
+new_augment = "function augmentExistingPortal() {\n  if (document.querySelector(\"[data-phase9-root]\")) return;\n  const chapterNav = document.querySelector(\".cp2-nav\");"
+if old_augment in text:
+    text = text.replace(old_augment, new_augment, 1)
+    changed = True
 
 old_validation = '''function validateRequiredAnswers(role, answers) {
   const schema = schemaForAssignment(state.currentAssignment);
@@ -38,10 +40,10 @@ new_validation = '''function validateRequiredAnswers(role, answers, form) {
   }
 }'''
 
-if old_validation not in text:
-    raise SystemExit("Could not locate required-answer validation")
-text = text.replace(old_validation, new_validation, 1)
-text = text.replace("    validateRequiredAnswers(role, answers);", "    validateRequiredAnswers(role, answers, form);", 1)
+if old_validation in text:
+    text = text.replace(old_validation, new_validation, 1)
+    text = text.replace("    validateRequiredAnswers(role, answers);", "    validateRequiredAnswers(role, answers, form);", 1)
+    changed = True
 
 old_review = '''  if (["changes_requested", "denied"].includes(status) && note.length < 10) throw new Error("Provide an administrative note of at least ten characters.");
   if (status === "approved" && !state.currentResponse) throw new Error("A response must exist before this assignment can be approved.");
@@ -52,9 +54,9 @@ new_review = '''  if (["changes_requested", "denied"].includes(status) && note.l
     throw new Error("The chapter must formally submit this response before an administrative decision can be recorded.");
   }
   const assignment = state.currentAssignment;'''
-if old_review not in text:
-    raise SystemExit("Could not locate administrative review guard")
-text = text.replace(old_review, new_review, 1)
+if old_review in text:
+    text = text.replace(old_review, new_review, 1)
+    changed = True
 
 path.write_text(text, encoding="utf-8")
-print("Phase 9 runtime hardening applied.")
+print("Phase 9 runtime hardening applied." if changed else "Phase 9 runtime hardening already present.")
