@@ -7,34 +7,20 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-
-      - name: Set up Java 21
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/phase9-returned-forms-unassign'
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Apply Phase 9 returned-form and unassign migration
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/phase9-returned-forms-unassign'
-        run: python3 scripts/apply_phase9_return_unassign.py
 
       - name: Validate JavaScript syntax
         shell: bash
@@ -44,12 +30,6 @@ jobs:
             echo "Checking $file"
             node --input-type=module --check < "$file"
           done < <(find assets/js -type f -name '*.js' -print0 | sort -z)
-
-      - name: Compile Firestore Rules
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/phase9-returned-forms-unassign'
-        env:
-          CI: "true"
-        run: npx --yes firebase-tools@15.2.1 emulators:exec --only firestore --project demo-tpp-chapters "echo Firestore rules compiled"
 
       - name: Run repository checks
         run: python3 scripts/validate_repository.py
@@ -86,12 +66,3 @@ jobs:
 
       - name: Validate Phase 9 returned forms and unassign
         run: python3 scripts/validate_phase9_return_unassign.py
-
-      - name: Commit generated Phase 9 fix
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/phase9-returned-forms-unassign'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Fix returned forms and add assignment removal" || exit 0
-          git push origin HEAD:fix/phase9-returned-forms-unassign
