@@ -29,8 +29,8 @@ if "function hasChapterMembership(chapterId)" not in rules:
     errors.append("Firestore chapter-membership authorization is missing")
 
 index = Path("index.html").read_text(encoding="utf-8")
-if 'content="20260805.1"' not in index:
-    errors.append("The production build was not cache-busted to 20260805.1")
+if 'content="20260807.1"' not in index:
+    errors.append("The production build was not cache-busted to 20260807.1")
 
 if errors:
     for error in errors:

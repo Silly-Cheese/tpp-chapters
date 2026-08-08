@@ -961,7 +961,12 @@ service cloud.firestore {
       ];
       return hasChapterMembershipRole(assignment.chapterId, ['director', 'adviser'])
         && !(resource.data.status in ['approved', 'denied', 'waived'])
-        && role == resource.data.currentStep
+        && (role == resource.data.currentStep
+          || (resource.data.status == 'changes_requested'
+            && ((assignment.workflow == 'single_director' && role == 'director')
+              || (assignment.workflow == 'single_adviser' && role == 'adviser')
+              || (assignment.workflow == 'director_then_adviser'
+                && (resource.data.returnRole == role || resource.data.currentStep == role)))))
         && formResponseBaseValid(assignmentId, request.resource.data)
         && formResponseStatusEditable(request.resource.data.status)
         && request.resource.data.createdByUid == resource.data.createdByUid
@@ -1285,7 +1290,10 @@ service cloud.firestore {
         && request.resource.data.createdByUid == request.auth.uid
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
-      allow update: if canReviewRequiredForms();
+      allow update: if canReviewRequiredForms()
+        && (isOwner()
+          || (resource.data.status != 'withdrawn'
+            && request.resource.data.status != 'withdrawn'));
       allow delete: if isOwner();
 
       match /responses/{responseId} {

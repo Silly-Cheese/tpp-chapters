@@ -22,7 +22,7 @@ for marker in ("saveFirestoreAttachment", "downloadFirestoreAttachment", "firest
     if marker not in files["shared"]: errors.append(f"Shared Firestore attachment engine is missing {marker}")
 for marker in ("validSubmissionAttachmentChunk", "validSupportAttachmentChunk", "data.size() <= 450000", "size <= 2097152"):
     if marker not in files["rules"]: errors.append(f"Firestore Rules are missing {marker}")
-if 'content="20260805.1"' not in files["index"]: errors.append("Production build was not bumped to 20260805.1")
+if 'content="20260807.1"' not in files["index"]: errors.append("Production build was not bumped to 20260807.1")
 
 if errors:
     for error in errors: print(f"ERROR: {error}")

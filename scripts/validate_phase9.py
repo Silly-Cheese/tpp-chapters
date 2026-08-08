@@ -9,9 +9,9 @@ css = Path("assets/phase9.css").read_text(encoding="utf-8")
 rules = Path("firestore.rules").read_text(encoding="utf-8")
 
 for marker in (
-    'content="20260805.1"',
-    'assets/phase9.css?v=20260805.1',
-    'assets/js/phase9.js?v=20260805.1',
+    'content="20260807.1"',
+    'assets/phase9.css?v=20260807.1',
+    'assets/js/phase9.js?v=20260807.1',
 ):
     if marker not in index:
         errors.append(f"Production entry point is missing Phase 9 marker: {marker}")
