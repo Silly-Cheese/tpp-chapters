@@ -150,3 +150,10 @@ Use separate accounts and verify:
 16. Attachments upload, download, and remove before final approval.
 17. Completed responses print without portal navigation.
 18. No form route requests Firebase Storage.
+
+
+## Returned forms and administrative removal
+
+When changes are requested, single-role forms automatically return to their only valid role. Director-then-Adviser forms return only to a role that participates in that workflow. Existing returned forms with an incorrect legacy step are normalized so the intended Director or Adviser can edit and resubmit them.
+
+The Owner may remove an assignment from a chapter from the Forms & Agreements administration pages. Removal uses the `withdrawn` assignment state rather than deleting Firestore records. The assignment disappears from the chapter portal, its linked compliance requirement becomes not required, and prior responses, certifications, attachments, and history remain available to administrators for audit purposes.

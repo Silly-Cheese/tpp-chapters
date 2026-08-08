@@ -63,3 +63,6 @@ jobs:
 
       - name: Validate Phase 9 required forms
         run: python3 scripts/validate_phase9.py
+
+      - name: Validate Phase 9 returned forms and unassign
+        run: python3 scripts/validate_phase9_return_unassign.py

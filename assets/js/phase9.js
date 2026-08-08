@@ -25,7 +25,7 @@ import {
 } from "./firestore-attachments.js";
 
 const app = document.querySelector("#app");
-const BUILD = "20260805.1";
+const BUILD = "20260807.1";
 const ADMIN_ROLES = new Set(["owner", "chapterAdmin", "complianceAdmin"]);
 const CHAPTER_ROLES = new Set(["director", "adviser"]);
 const ADMIN_ROUTES = new Set([
@@ -41,7 +41,7 @@ const CHAPTER_ROUTES = new Set([
   "/chapter/forms/view"
 ]);
 const ALL_ROUTES = new Set([...ADMIN_ROUTES, ...CHAPTER_ROUTES]);
-const TERMINAL_STATUSES = new Set(["approved", "denied", "waived", "expired", "superseded"]);
+const TERMINAL_STATUSES = new Set(["approved", "denied", "waived", "expired", "superseded", "withdrawn"]);
 const REVIEWABLE_STATUSES = new Set(["submitted", "under_review", "changes_requested"]);
 
 const FIELD_TYPES = {
@@ -82,7 +82,8 @@ const STATUS_LABELS = {
   denied: "Denied",
   waived: "Waived",
   expired: "Expired",
-  superseded: "Superseded"
+  superseded: "Superseded",
+  withdrawn: "Removed by administration"
 };
 
 const WORKFLOW_LABELS = {
@@ -249,6 +250,7 @@ function selectedMembership() {
 }
 
 function assignmentStatus(item, response = state.responses.get(item.id)) {
+  if (item?.status === "withdrawn") return "withdrawn";
   const status = response?.status || item.status || "assigned";
   const due = toDate(item.dueAt);
   if (!TERMINAL_STATUSES.has(status) && due && due.getTime() < Date.now()) return "overdue";
@@ -266,12 +268,17 @@ function initialStep(workflow) {
 }
 
 function activeRoleForResponse(assignment, response) {
+  if (response?.status === "changes_requested") {
+    if (assignment.workflow === "single_director") return "director";
+    if (assignment.workflow === "single_adviser") return "adviser";
+    if (["director", "adviser"].includes(response.returnRole)) return response.returnRole;
+  }
   return response?.currentStep || initialStep(assignment.workflow);
 }
 
 function canCurrentUserEdit(assignment, response) {
   if (!assignment || !CHAPTER_ROLES.has(selectedMembership()?.role)) return false;
-  if (TERMINAL_STATUSES.has(response?.status || assignment.status)) return false;
+  if (TERMINAL_STATUSES.has(assignment.status) || TERMINAL_STATUSES.has(response?.status)) return false;
   const role = selectedMembership().role;
   const step = activeRoleForResponse(assignment, response);
   if (response?.status === "submitted" || response?.status === "under_review") return false;
@@ -339,7 +346,8 @@ async function loadAssignments({ admin = false } = {}) {
     state.assignments = [];
     return;
   }
-  state.assignments = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }))
+  const records = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  state.assignments = (admin ? records : records.filter((item) => item.status !== "withdrawn"))
     .sort((a, b) => (toDate(a.dueAt)?.getTime() || Number.MAX_SAFE_INTEGER) - (toDate(b.dueAt)?.getTime() || Number.MAX_SAFE_INTEGER));
   await loadResponseSummaries(state.assignments);
 }
@@ -365,6 +373,9 @@ async function loadCurrentAssignment(id) {
   const assignmentSnapshot = await getDoc(doc(db, "formAssignments", id));
   if (!assignmentSnapshot.exists()) throw new Error("This required form assignment could not be found.");
   state.currentAssignment = { id: assignmentSnapshot.id, ...assignmentSnapshot.data() };
+  if (!isAdmin() && state.currentAssignment.status === "withdrawn") {
+    throw new Error("This form assignment was removed by administration and is no longer active.");
+  }
   const responseRef = doc(db, "formAssignments", id, "responses", "current");
   const [responseSnapshot, attachmentSnapshot, historySnapshot] = await Promise.all([
     getDoc(responseRef),
@@ -525,7 +536,10 @@ function adminFormsPage() {
 
 function adminAssignmentRow(item) {
   const status = assignmentStatus(item);
-  return `<article><div><strong>${esc(item.title)}</strong><span>${esc(item.chapterName || item.chapterId)} · Due ${esc(fmt(item.dueAt))}</span></div>${badge(status)}<a class="btn btn-secondary btn-small" href="#/admin/forms/review?id=${encodeURIComponent(item.id)}">Review</a></article>`;
+  const removeAction = isOwner() && item.status !== "withdrawn"
+    ? `<button class="btn btn-secondary btn-small" type="button" data-p9-action="unassign-form" data-id="${esc(item.id)}">Remove assignment</button>`
+    : "";
+  return `<article><div><strong>${esc(item.title)}</strong><span>${esc(item.chapterName || item.chapterId)} · Due ${esc(fmt(item.dueAt))}</span></div>${badge(status)}<a class="btn btn-secondary btn-small" href="#/admin/forms/review?id=${encodeURIComponent(item.id)}">Review</a>${removeAction}</article>`;
 }
 
 function builderField(field, sectionIndex, fieldIndex, workflow) {
@@ -594,7 +608,7 @@ function responsesPage() {
   });
   return adminLayout(`
     ${heading("Response review", "Required-form response queue", "Review certifications, return responses for changes, approve compliance evidence, or waive a requirement.")}
-    <div class="p9-filter"><label>Status<select id="p9-response-filter"><option value="review" ${filter === "review" ? "selected" : ""}>Awaiting review</option><option value="overdue" ${filter === "overdue" ? "selected" : ""}>Overdue</option><option value="changes_requested" ${filter === "changes_requested" ? "selected" : ""}>Changes requested</option><option value="approved" ${filter === "approved" ? "selected" : ""}>Approved</option><option value="denied" ${filter === "denied" ? "selected" : ""}>Denied</option><option value="all" ${filter === "all" ? "selected" : ""}>All assignments</option></select></label><span>${filtered.length} assignment${filtered.length === 1 ? "" : "s"}</span></div>
+    <div class="p9-filter"><label>Status<select id="p9-response-filter"><option value="review" ${filter === "review" ? "selected" : ""}>Awaiting review</option><option value="overdue" ${filter === "overdue" ? "selected" : ""}>Overdue</option><option value="changes_requested" ${filter === "changes_requested" ? "selected" : ""}>Changes requested</option><option value="approved" ${filter === "approved" ? "selected" : ""}>Approved</option><option value="denied" ${filter === "denied" ? "selected" : ""}>Denied</option><option value="withdrawn" ${filter === "withdrawn" ? "selected" : ""}>Removed</option><option value="all" ${filter === "all" ? "selected" : ""}>All assignments</option></select></label><span>${filtered.length} assignment${filtered.length === 1 ? "" : "s"}</span></div>
     <section class="p9-panel">${filtered.length ? `<div class="p9-assignment-table">${filtered.map(adminAssignmentRow).join("")}</div>` : empty("No matching responses.", "Change the filter or wait for chapters to submit their required forms.")}</section>
   `, "Response Review");
 }
@@ -740,11 +754,13 @@ function reviewPage() {
   const response = state.currentResponse;
   if (!assignment) return adminLayout(empty("Assignment unavailable.", "The requested form assignment could not be found."), "Review Response");
   const status = assignmentStatus(assignment, response);
+  const allowedReturnRoles = workflowRoles(assignment.workflow);
+  const returnRoleOptions = allowedReturnRoles.map((role) => `<option value="${esc(role)}">${esc(roleLabel(role))}</option>`).join("");
   return adminLayout(`
     ${heading("Administrative review", assignment.title, `${assignment.chapterName} · ${assignment.chapterId}`, `<button class="btn btn-secondary" type="button" data-p9-action="print">${icons.print} Print</button>`)}
     <section class="p9-record-summary"><div>${badge(status)}</div><dl><div><dt>Chapter</dt><dd>${esc(assignment.chapterName)}</dd></div><div><dt>Workflow</dt><dd>${esc(WORKFLOW_LABELS[assignment.workflow])}</dd></div><div><dt>Due date</dt><dd>${esc(fmt(assignment.dueAt))}</dd></div><div><dt>Version</dt><dd>${assignment.versionNumber}</dd></div></dl></section>
     ${response ? `${readOnlySections(assignment, response)}${certificationRecord(response)}${attachmentsBlock(false)}` : empty("No response has been saved.", "The chapter has not started this assignment.")}
-    <section class="p9-panel p9-review-panel"><header><div><p class="p9-kicker">Decision</p><h2>Review and disposition</h2></div></header><form id="p9-review-form"><label>Administrative note<textarea name="reviewNote" rows="5" maxlength="3000" placeholder="Required when requesting changes or denying the response.">${esc(response?.reviewNote || assignment.reviewNote || "")}</textarea></label><label>Return changes to<select name="returnRole"><option value="director">Chapter Director</option><option value="adviser">Chapter Adviser</option></select></label><div id="p9-review-alert"></div><div class="p9-review-actions"><button class="btn btn-secondary" type="button" data-p9-review="changes_requested">Request changes</button><button class="btn btn-secondary" type="button" data-p9-review="denied">Deny</button><button class="btn btn-secondary" type="button" data-p9-review="waived">Waive requirement</button><button class="btn btn-primary" type="button" data-p9-review="approved">${icons.check} Approve</button></div></form></section>
+    <section class="p9-panel p9-review-panel"><header><div><p class="p9-kicker">Decision</p><h2>Review and disposition</h2></div></header><form id="p9-review-form"><label>Administrative note<textarea name="reviewNote" rows="5" maxlength="3000" placeholder="Required when requesting changes or denying the response.">${esc(response?.reviewNote || assignment.reviewNote || "")}</textarea></label><label>Return changes to<select name="returnRole">${returnRoleOptions}</select></label><div id="p9-review-alert"></div><div class="p9-review-actions"><button class="btn btn-secondary" type="button" data-p9-review="changes_requested">Request changes</button><button class="btn btn-secondary" type="button" data-p9-review="denied">Deny</button><button class="btn btn-secondary" type="button" data-p9-review="waived">Waive requirement</button><button class="btn btn-primary" type="button" data-p9-review="approved">${icons.check} Approve</button></div></form></section>
     ${historyBlock()}
   `, "Review Response");
 }
@@ -1355,13 +1371,15 @@ async function reviewResponse(status) {
   if (!isAdmin() || !state.currentAssignment) return;
   const form = document.querySelector("#p9-review-form");
   const note = form?.reviewNote.value.trim() || "";
-  const returnRole = form?.returnRole.value || "director";
+  const assignment = state.currentAssignment;
+  const validReturnRoles = workflowRoles(assignment.workflow);
+  const requestedReturnRole = form?.returnRole.value || validReturnRoles[0];
+  const returnRole = validReturnRoles.includes(requestedReturnRole) ? requestedReturnRole : validReturnRoles[0];
   if (["changes_requested", "denied"].includes(status) && note.length < 10) throw new Error("Provide an administrative note of at least ten characters.");
   if (["approved", "changes_requested", "denied"].includes(status)
       && !["submitted", "under_review"].includes(state.currentResponse?.status)) {
     throw new Error("The chapter must formally submit this response before an administrative decision can be recorded.");
   }
-  const assignment = state.currentAssignment;
   const assignmentRef = doc(db, "formAssignments", assignment.id);
   const responseRef = doc(assignmentRef, "responses", "current");
   const batch = writeBatch(db);
@@ -1415,6 +1433,48 @@ async function reviewResponse(status) {
   await loadCurrentAssignment(assignment.id);
   setAlert("p9-review-alert", "success", `Response ${STATUS_LABELS[status]?.toLowerCase() || titleCase(status)}`, "The assignment and linked compliance item were updated.");
   setTimeout(() => go("/admin/forms/responses"), 1000);
+}
+
+async function withdrawAssignment(id) {
+  if (!isOwner()) return;
+  const assignment = state.assignments.find((item) => item.id === id) || (state.currentAssignment?.id === id ? state.currentAssignment : null);
+  if (!assignment || assignment.status === "withdrawn") return;
+  const reason = prompt(`Why are you removing ${assignment.title} from ${assignment.chapterName || assignment.chapterId}?`);
+  if (reason == null) return;
+  const cleanReason = reason.trim();
+  if (cleanReason.length < 10) throw new Error("Provide a removal reason of at least ten characters.");
+  if (!confirm(`Remove this assignment from ${assignment.chapterName || assignment.chapterId}'s portal? The response history will be preserved.`)) return;
+
+  const batch = writeBatch(db);
+  batch.update(doc(db, "formAssignments", assignment.id), {
+    status: "withdrawn",
+    withdrawalReason: cleanReason,
+    withdrawnAt: serverTimestamp(),
+    withdrawnByUid: state.user.uid,
+    withdrawnByName: state.profile?.displayName || state.user.email,
+    updatedAt: serverTimestamp()
+  });
+  if (assignment.complianceRequirementId) {
+    batch.update(doc(db, "chapters", assignment.chapterId, "requirements", assignment.complianceRequirementId), {
+      status: "not_required",
+      administrativeNote: `Required form removed by administration: ${cleanReason}`,
+      reviewedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  }
+  batch.set(doc(collection(db, "auditLogs")), {
+    actorUid: state.user.uid,
+    action: "required_form_withdrawn",
+    targetType: "formAssignment",
+    targetId: assignment.id,
+    summary: `Removed ${assignment.title} from ${assignment.chapterId}. ${cleanReason}`,
+    createdAt: serverTimestamp()
+  });
+  await batch.commit();
+  await loadAssignments({ admin: true });
+  toast("Assignment removed", "It no longer appears in the chapter portal. Historical responses remain available to administrators.");
+  if (route() === "/admin/forms/review") setTimeout(() => go("/admin/forms/responses?status=all"), 700);
+  else render(false);
 }
 
 async function downloadAttachment(id) {
@@ -1544,6 +1604,7 @@ function bindPage() {
   document.querySelector('[data-p9-action="save-response-draft"]')?.addEventListener("click", () => saveResponse({ submit: false }).catch((error) => setAlert("p9-response-alert", "danger", "Draft not saved", error.message)));
   document.querySelector('[data-p9-action="submit-response"]')?.addEventListener("click", () => saveResponse({ submit: true }).catch((error) => setAlert("p9-response-alert", "danger", "Response not submitted", error.message)));
   document.querySelectorAll("[data-p9-review]").forEach((button) => button.addEventListener("click", () => reviewResponse(button.dataset.p9Review).catch((error) => setAlert("p9-review-alert", "danger", "Review not saved", error.message))));
+  document.querySelectorAll('[data-p9-action="unassign-form"]').forEach((button) => button.addEventListener("click", () => withdrawAssignment(button.dataset.id).catch((error) => toast("Assignment not removed", error.message, "danger"))));
 }
 
 async function prepareRoute(currentRoute) {
